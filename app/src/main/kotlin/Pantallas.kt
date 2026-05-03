@@ -1964,6 +1964,13 @@ fun PantallaInicioSesion(
     var contrasena by remember { mutableStateOf("") }
     var showResetDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(estado.cambiarAPestanaInicioSesion) {
+        if (estado.cambiarAPestanaInicioSesion) {
+            tab = AuthTab.LOGIN
+            viewModel.consumirCambioPestanaTrasRegistro()
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()

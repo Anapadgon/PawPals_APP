@@ -61,7 +61,15 @@ class ModeloVistaAdministracion @Inject constructor(
     fun establecerBloqueado(uid: String, bloqueado: Boolean) {
         viewModelScope.launch {
             val r = repositorioUsuario.establecerBloqueado(uid, bloqueado)
-            _estado.update { it.copy(mensaje = r.exceptionOrNull()?.message) }
+            _estado.update {
+                it.copy(
+                    mensaje = if (r.isSuccess) null
+                    else mensajeErrorSupabaseHumano(
+                        r.exceptionOrNull(),
+                        "No se pudo cambiar el estado de bloqueo del usuario.",
+                    ),
+                )
+            }
             refrescarTodo()
         }
     }
@@ -69,7 +77,15 @@ class ModeloVistaAdministracion @Inject constructor(
     fun eliminarUsuario(uid: String) {
         viewModelScope.launch {
             val r = repositorioUsuario.eliminarPerfilUsuario(uid)
-            _estado.update { it.copy(mensaje = r.exceptionOrNull()?.message) }
+            _estado.update {
+                it.copy(
+                    mensaje = if (r.isSuccess) null
+                    else mensajeErrorSupabaseHumano(
+                        r.exceptionOrNull(),
+                        "No se pudo eliminar el usuario.",
+                    ),
+                )
+            }
             refrescarTodo()
         }
     }
@@ -96,7 +112,12 @@ class ModeloVistaAdministracion @Inject constructor(
                     sembrando = false,
                     mensaje = result.fold(
                         onSuccess = { count -> "Se han creado $count perfiles de prueba." },
-                        onFailure = { e -> "Error creando perfiles: ${e.message}" },
+                        onFailure = { e ->
+                            mensajeErrorSupabaseHumano(
+                                e,
+                                "No se pudieron crear los perfiles de prueba.",
+                            )
+                        },
                     ),
                 )
             }
@@ -114,7 +135,12 @@ class ModeloVistaAdministracion @Inject constructor(
                     sembrando = false,
                     mensaje = result.fold(
                         onSuccess = { count -> "Se han eliminado $count perfiles de prueba." },
-                        onFailure = { e -> "Error eliminando perfiles: ${e.message}" },
+                        onFailure = { e ->
+                            mensajeErrorSupabaseHumano(
+                                e,
+                                "No se pudieron eliminar los perfiles de prueba.",
+                            )
+                        },
                     ),
                 )
             }
@@ -187,7 +213,9 @@ class ModeloVistaAjustes @Inject constructor(
                 it.copy(
                     ocupado = false,
                     info = if (r.isSuccess) "Te hemos enviado un correo a $nuevoCorreo para confirmar el cambio." else null,
-                    error = r.exceptionOrNull()?.message,
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo iniciar el cambio de correo.")
+                    },
                 )
             }
         }
@@ -201,7 +229,9 @@ class ModeloVistaAjustes @Inject constructor(
                 it.copy(
                     ocupado = false,
                     info = if (r.isSuccess) "Te hemos enviado un correo para restablecer la contraseña." else null,
-                    error = r.exceptionOrNull()?.message,
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo enviar el correo de recuperación.")
+                    },
                 )
             }
         }
@@ -215,7 +245,9 @@ class ModeloVistaAjustes @Inject constructor(
                 it.copy(
                     ocupado = false,
                     info = if (r.isSuccess) "Contraseña actualizada correctamente." else null,
-                    error = r.exceptionOrNull()?.message,
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo cambiar la contraseña.")
+                    },
                 )
             }
         }
@@ -247,7 +279,9 @@ class ModeloVistaAjustes @Inject constructor(
                 it.copy(
                     ocupado = false,
                     info = if (r.isSuccess) "Cuenta eliminada correctamente." else null,
-                    error = r.exceptionOrNull()?.message,
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo eliminar la cuenta. Revisa la contraseña.")
+                    },
                 )
             }
         }
@@ -296,7 +330,10 @@ class ModeloVistaBloqueado @Inject constructor(
                 } else {
                     it.copy(
                         enviando = false,
-                        error = r.exceptionOrNull()?.message ?: "No se pudo enviar el mensaje",
+                        error = mensajeErrorSupabaseHumano(
+                            r.exceptionOrNull(),
+                            "No se pudo enviar el mensaje a soporte.",
+                        ),
                     )
                 }
             }
@@ -338,6 +375,7 @@ class ModeloVistaConfiguracionPerfil @Inject constructor(
     private val repositorioUsuario: RepositorioUsuario,
     private val repositorioPerro: RepositorioPerro,
     private val repositorioAlmacenamiento: RepositorioAlmacenamiento,
+    private val repositorioAutenticacion: RepositorioAutenticacion,
 ) : ViewModel() {
 
     private val _estado = MutableStateFlow(EstadoUiConfiguracionPerfil())
@@ -381,6 +419,21 @@ class ModeloVistaConfiguracionPerfil @Inject constructor(
             val s = _estado.value
             _estado.update { it.copy(guardando = true, error = null) }
 
+            // Sin fila en `usuarios`, `actualizarPerfil` no inserta y `guardarPerro` rompe la FK.
+            val correo = repositorioAutenticacion.cuentaActual()?.correo.orEmpty()
+            repositorioUsuario.asegurarDocumentoUsuario(uid, correo).onFailure { e ->
+                _estado.update {
+                    it.copy(
+                        guardando = false,
+                        error = mensajeErrorSupabaseHumano(
+                            e,
+                            "No se pudo crear tu ficha de usuario. Revisa la conexión e inténtalo de nuevo.",
+                        ),
+                    )
+                }
+                return@launch
+            }
+
             val humanPhotoUrl = s.uriFotoHumano?.let {
                 repositorioAlmacenamiento.subirFotoPerfil(uid, it).getOrNull()
             }
@@ -408,7 +461,8 @@ class ModeloVistaConfiguracionPerfil @Inject constructor(
                 energia = s.energia,
                 sociabilidad = s.sociabilidad,
             )
-            val err = u.exceptionOrNull()?.message ?: d.exceptionOrNull()?.message
+            val fallo = u.exceptionOrNull() ?: d.exceptionOrNull()
+            val err = fallo?.let { mensajeErrorSupabaseHumano(it, "No se pudo guardar tu perfil.") }
             _estado.update { it.copy(guardando = false, completado = err == null, error = err) }
         }
     }
@@ -512,7 +566,9 @@ class ModeloVistaConversacion @Inject constructor(
             _estado.update {
                 it.copy(
                     enviando = false,
-                    error = r.exceptionOrNull()?.message,
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo enviar el mensaje.")
+                    },
                 )
             }
         }
@@ -525,7 +581,9 @@ class ModeloVistaConversacion @Inject constructor(
             _estado.update {
                 it.copy(
                     info = if (r.isSuccess) "Solicitud de amistad enviada" else null,
-                    error = r.exceptionOrNull()?.message,
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo enviar la solicitud de amistad.")
+                    },
                 )
             }
         }
@@ -538,7 +596,9 @@ class ModeloVistaConversacion @Inject constructor(
             _estado.update {
                 it.copy(
                     info = if (r.isSuccess) "¡Ahora sois amigos! Verás su ubicación cuando pasee." else null,
-                    error = r.exceptionOrNull()?.message,
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo aceptar la solicitud.")
+                    },
                 )
             }
         }
@@ -548,7 +608,13 @@ class ModeloVistaConversacion @Inject constructor(
         val req = _estado.value.solicitudPendiente ?: return
         viewModelScope.launch {
             val r = repositorioAmistad.rechazarSolicitudAmistad(req.id)
-            _estado.update { it.copy(error = r.exceptionOrNull()?.message) }
+            _estado.update {
+                it.copy(
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo rechazar la solicitud.")
+                    },
+                )
+            }
         }
     }
 
@@ -665,7 +731,9 @@ class ModeloVistaExplorar @Inject constructor(
                     indice = it.indice + 1,
                     ultimoUidCoincidencia = ultimaCoincidencia,
                     mensajeInfo = info,
-                    error = r.exceptionOrNull()?.message,
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo registrar tu respuesta.")
+                    },
                 )
             }
         }
@@ -822,7 +890,10 @@ class ModeloVistaMapa @Inject constructor(
                 _estado.update {
                     it.copy(
                         cargando = false,
-                        mensaje = loc.exceptionOrNull()?.message ?: "Ubicación no disponible",
+                        mensaje = mensajeErrorSupabaseHumano(
+                            loc.exceptionOrNull(),
+                            "No pudimos obtener tu ubicación. Revisa los permisos.",
+                        ),
                     )
                 }
                 return@launch
@@ -868,8 +939,14 @@ class ModeloVistaMapa @Inject constructor(
             _estado.update {
                 it.copy(
                     yoPaseando = nuevoPaseando,
-                    snack = r.exceptionOrNull()?.message
-                        ?: if (nuevoPaseando) "Paseo iniciado. ¡Disfrutad!" else "Paseo finalizado.",
+                    snack = if (r.isFailure) {
+                        mensajeErrorSupabaseHumano(
+                            r.exceptionOrNull(),
+                            "No se pudo actualizar el estado del paseo.",
+                        )
+                    } else {
+                        if (nuevoPaseando) "Paseo iniciado. ¡Disfrutad!" else "Paseo finalizado."
+                    },
                 )
             }
         }
@@ -990,7 +1067,8 @@ class ModeloVistaPerfil @Inject constructor(
                 energia = s.energia,
                 sociabilidad = s.sociabilidad,
             )
-            val err = u.exceptionOrNull()?.message ?: d.exceptionOrNull()?.message
+            val fallo = u.exceptionOrNull() ?: d.exceptionOrNull()
+            val err = fallo?.let { mensajeErrorSupabaseHumano(it, "No se pudo guardar el perfil.") }
             _estado.update {
                 it.copy(
                     guardandoPerfil = false,
@@ -1162,7 +1240,12 @@ class ModeloVistaReporte @Inject constructor(
             _estado.value = if (r.isSuccess) {
                 EstadoUiReporte(completado = true)
             } else {
-                EstadoUiReporte(error = r.exceptionOrNull()?.message)
+                EstadoUiReporte(
+                    error = mensajeErrorSupabaseHumano(
+                        r.exceptionOrNull(),
+                        "No se pudo enviar el reporte.",
+                    ),
+                )
             }
         }
     }
@@ -1216,6 +1299,8 @@ data class EstadoUiAutenticacion(
     val cargando: Boolean = false,
     val error: String? = null,
     val info: String? = null,
+    /** Tras registro con correo pendiente de verificar: la UI puede pasar a la pestaña de inicio de sesión. */
+    val cambiarAPestanaInicioSesion: Boolean = false,
 )
 
 @HiltViewModel
@@ -1238,23 +1323,43 @@ class ModeloVistaAutenticacion @Inject constructor(
                 }
                 EstadoUiAutenticacion()
             } else {
-                EstadoUiAutenticacion(error = r.exceptionOrNull()?.message ?: "Error de acceso")
+                EstadoUiAutenticacion(
+                    error = mensajeErrorSupabaseHumano(
+                        r.exceptionOrNull(),
+                        "No pudimos iniciar sesión. Revisa correo y contraseña.",
+                    ),
+                )
             }
         }
     }
 
     fun registrar(correo: String, contrasena: String) {
         viewModelScope.launch {
+            val correoTrim = correo.trim()
             _estado.value = EstadoUiAutenticacion(cargando = true)
-            val r = repositorioAutenticacion.registrarCorreo(correo.trim(), contrasena)
-            _estado.value = if (r.isSuccess) {
-                val u = repositorioAutenticacion.cuentaActual()
-                if (u != null) {
-                    repositorioUsuario.asegurarDocumentoUsuario(u.uid, u.correo.orEmpty())
+            val r = repositorioAutenticacion.registrarCorreo(correoTrim, contrasena)
+            _estado.value = when {
+                r.isFailure -> EstadoUiAutenticacion(
+                    error = mensajeErrorSupabaseHumano(
+                        r.exceptionOrNull(),
+                        "No pudimos crear la cuenta. Inténtalo de nuevo.",
+                    ),
+                )
+                r.getOrNull()?.sesionActiva == true -> {
+                    val u = repositorioAutenticacion.cuentaActual()
+                    if (u != null) {
+                        repositorioUsuario.asegurarDocumentoUsuario(u.uid, u.correo.orEmpty())
+                    }
+                    EstadoUiAutenticacion()
                 }
-                EstadoUiAutenticacion()
-            } else {
-                EstadoUiAutenticacion(error = r.exceptionOrNull()?.message ?: "No se pudo registrar")
+                else -> {
+                    val c = r.getOrNull()?.correo ?: correoTrim
+                    EstadoUiAutenticacion(
+                        info = "Cuenta creada correctamente. Te hemos enviado un correo a $c. " +
+                            "Abre el enlace y confirma tu correo antes de iniciar sesión.",
+                        cambiarAPestanaInicioSesion = true,
+                    )
+                }
             }
         }
     }
@@ -1262,17 +1367,30 @@ class ModeloVistaAutenticacion @Inject constructor(
     /** Restablecer contraseña desde la pantalla de login. */
     fun restablecerContrasena(correo: String) {
         viewModelScope.launch {
-            _estado.update { it.copy(cargando = true, error = null, info = null) }
+            _estado.update {
+                it.copy(cargando = true, error = null, info = null, cambiarAPestanaInicioSesion = false)
+            }
             val r = repositorioAutenticacion.enviarCorreoRestablecerContrasena(correo)
             _estado.update {
                 if (r.isSuccess) {
                     it.copy(cargando = false, info = "Te hemos enviado un correo para restablecer la contraseña")
                 } else {
-                    it.copy(cargando = false, error = r.exceptionOrNull()?.message ?: "No se pudo enviar el correo")
+                    it.copy(
+                        cargando = false,
+                        error = mensajeErrorSupabaseHumano(
+                            r.exceptionOrNull(),
+                            "No se pudo enviar el correo de recuperación.",
+                        ),
+                    )
                 }
             }
         }
     }
 
-    fun limpiarRetroalimentacion() = _estado.update { it.copy(info = null, error = null) }
+    fun limpiarRetroalimentacion() = _estado.update {
+        it.copy(info = null, error = null, cambiarAPestanaInicioSesion = false)
+    }
+
+    fun consumirCambioPestanaTrasRegistro() =
+        _estado.update { it.copy(cambiarAPestanaInicioSesion = false) }
 }

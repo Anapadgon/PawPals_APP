@@ -9,34 +9,35 @@ security definer
 set search_path = public, auth
 as $$
 declare
-  uid text := (select auth.uid())::text;
+  v_uid text := (select auth.uid())::text;
 begin
-  if uid is null or uid = '' then
+  if v_uid is null or v_uid = '' then
     raise exception 'not authenticated';
   end if;
 
-  -- Conversaciones del usuario (mensajes en cascada)
   delete from public.conversaciones
-  where uid = any(participantes);
+  where v_uid = any (participantes);
 
   delete from public.coincidencias
-  where uid = any(participantes);
+  where v_uid = any (participantes);
 
   delete from public.deslizamientos
-  where uid_origen = uid or uid_destino = uid;
+  where uid_origen = v_uid or uid_destino = v_uid;
 
   delete from public.solicitudes_amistad
-  where uid_origen = uid or uid_destino = uid;
+  where uid_origen = v_uid or uid_destino = v_uid;
+
+  delete from public.amigos
+  where usuario_id = v_uid or amigo_id = v_uid;
 
   delete from public.reportes
-  where uid_reportante = uid;
+  where uid_reportante = v_uid;
 
-  delete from public.tickets_soporte
-  where uid = uid;
+  delete from public.tickets_soporte as t
+  where t.uid = v_uid;
 
-  -- amigos y perros se limpian por on delete cascade al borrar usuarios
   delete from public.usuarios
-  where id = uid;
+  where id = v_uid;
 
   delete from auth.users
   where id = auth.uid();

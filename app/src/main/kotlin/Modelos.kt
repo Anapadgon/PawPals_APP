@@ -6,6 +6,19 @@ data class CuentaAuth(
     val correo: String?,
 )
 
+/**
+ * Resultado del registro por correo en Supabase Auth.
+ *
+ * Si en el panel de Supabase tienes **Confirm email** desactivado (recomendado para esta demo),
+ * [sesionActiva] será `true` y el usuario entra enseguida.
+ * Si lo activas más adelante, el alta en `auth.users` sigue siendo correcta pero puede no haber
+ * sesión hasta que el usuario abra el enlace del correo ([sesionActiva] `false`).
+ */
+data class ResultadoRegistroCorreo(
+    val correo: String,
+    val sesionActiva: Boolean,
+)
+
 data class EstadisticasAdministracion(
     val numeroUsuarios: Int,
     val numeroPerros: Int,

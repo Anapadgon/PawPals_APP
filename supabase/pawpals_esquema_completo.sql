@@ -6,6 +6,13 @@
 -- No incluyas aquí URL ni claves API (anon/service_role). Configúralas solo en
 -- la app (BuildConfig / local.properties / secrets de CI).
 --
+-- ⚠️ IMPORTANTE — Correo / registro / «demasiados correos» (rate limit):
+--    Este archivo SQL NO configura Supabase Auth. No desactiva la verificación
+--    de correo ni los límites de envío. Eso solo se cambia en el PANEL:
+--    Authentication → Sign In / Providers → Email → desactivar confirmaciones.
+--    Si sigues viendo errores de rate limit, espera unos minutos o revisa
+--    Authentication → Rate Limits en el dashboard.
+--
 -- Convenciones:
 --   - Columnas en snake_case; mapeo desde la app Kotlin/Firestore indicado en
 --     comentarios (-- app: nombreCampo).
@@ -581,4 +588,15 @@ create policy medios_delete_authenticated_own
 --    como sensible; si se filtró, genera otra en el panel de Supabase.
 -- 4) Ejecuta también `pawpals_rpc_eliminar_cuenta.sql` para el borrado de cuenta
 --    desde la app (RPC `eliminar_cuenta_auth`).
+-- 5) Ejecuta `pawpals_rpc_asegurar_usuario.sql` para crear la fila inicial en `usuarios`
+--    al registrar / onboarding (RPC `pawpals_asegurar_mi_usuario`).
+-- 6) Ejecuta `pawpals_rpc_onboarding_perfil.sql` para guardar perfil humano + perro en onboarding
+--    (`pawpals_actualizar_mi_perfil`, `pawpals_guardar_mi_perro`).
+-- 7) PawPals (demo): evitar correo de confirmación y rate limits al registrar:
+--    Esto NO se hace con SQL. En el MISMO proyecto → menú lateral:
+--    Authentication → (a veces «Sign In / Providers» o pestaña Providers) → Email.
+--    Desactiva «Confirm email» / «Enable email confirmations» (deja registro con
+--    sesión inmediata y casi sin correos).
+--    Si aún ves «demasiados correos»: espera 5–15 min, o Authentication → Rate Limits
+--    (ajústalos en desarrollo), o prueba otro correo / red.
 -- =============================================================================

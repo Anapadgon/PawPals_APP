@@ -25,9 +25,18 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+
+/** Compara uids de Supabase Auth (p. ej. con o sin normalizar guiones). */
+private fun idsAuthCoinciden(uidParametro: String, uidDeSesion: String): Boolean {
+    val a = uidParametro.trim()
+    val b = uidDeSesion.trim()
+    if (a.equals(b, ignoreCase = true)) return true
+    return a.replace("-", "").equals(b.replace("-", ""), ignoreCase = true)
+}
 
 internal object Tablas {
     const val USUARIOS = "usuarios"
@@ -47,22 +56,22 @@ internal object Tablas {
 internal data class FilaUsuario(
     val id: String,
     val correo: String = "",
-    val nombreVisible: String = "",
+    @SerialName("nombre_visible") val nombreVisible: String = "",
     val zona: String = "",
-    val sobreMi: String = "",
+    @SerialName("sobre_mi") val sobreMi: String = "",
     val rol: String = "usuario",
     val bloqueado: Boolean = false,
     val latitud: Double? = null,
     val longitud: Double? = null,
-    val ubicacionActualizadaEn: Long? = null,
-    val tokenFcm: String? = null,
-    val urlFoto: String? = null,
-    val numeroAmigos: Int = 0,
-    val numeroPaseos: Int = 0,
-    val numeroCoincidencias: Int = 0,
+    @SerialName("ubicacion_actualizada_en") val ubicacionActualizadaEn: Long? = null,
+    @SerialName("token_fcm") val tokenFcm: String? = null,
+    @SerialName("url_foto") val urlFoto: String? = null,
+    @SerialName("numero_amigos") val numeroAmigos: Int = 0,
+    @SerialName("numero_paseos") val numeroPaseos: Int = 0,
+    @SerialName("numero_coincidencias") val numeroCoincidencias: Int = 0,
     val paseando: Boolean = false,
-    val creadoEn: Long? = null,
-    val esDemo: Boolean = false,
+    @SerialName("creado_en") val creadoEn: Long? = null,
+    @SerialName("es_demo") val esDemo: Boolean = false,
 )
 
 internal fun FilaUsuario.aPerfilUsuario(): PerfilUsuario = PerfilUsuario(
@@ -89,16 +98,16 @@ internal fun FilaUsuario.aPerfilUsuario(): PerfilUsuario = PerfilUsuario(
 @Serializable
 internal data class FilaPerro(
     val id: String,
-    val uidDueno: String,
+    @SerialName("uid_dueno") val uidDueno: String,
     val nombre: String = "",
     val raza: String = "",
-    val edadAnios: Int = 1,
+    @SerialName("edad_anios") val edadAnios: Int = 1,
     val biografia: String = "",
-    val urlFoto: String? = null,
+    @SerialName("url_foto") val urlFoto: String? = null,
     val energia: String = "moderado",
     val sociabilidad: String = "muy_sociable",
-    val actualizadoEn: Long? = null,
-    val esDemo: Boolean = false,
+    @SerialName("actualizado_en") val actualizadoEn: Long? = null,
+    @SerialName("es_demo") val esDemo: Boolean = false,
 )
 
 internal fun FilaPerro.aPerfilPerro(): PerfilPerro = PerfilPerro(
@@ -116,14 +125,14 @@ internal fun FilaPerro.aPerfilPerro(): PerfilPerro = PerfilPerro(
 @Serializable
 internal data class FilaCoincidencia(
     val id: String,
-    val usuarioA: String,
-    val usuarioB: String,
-    val usuarioMenor: String,
-    val usuarioMayor: String,
+    @SerialName("usuario_a") val usuarioA: String,
+    @SerialName("usuario_b") val usuarioB: String,
+    @SerialName("usuario_menor") val usuarioMenor: String,
+    @SerialName("usuario_mayor") val usuarioMayor: String,
     val participantes: List<String>,
     val iniciador: String,
     val estado: String,
-    val creadoEn: Long,
+    @SerialName("creado_en") val creadoEn: Long,
 )
 
 internal fun FilaCoincidencia.aCoincidencia(): Coincidencia = Coincidencia(
@@ -142,29 +151,29 @@ internal fun FilaCoincidencia.aCoincidencia(): Coincidencia = Coincidencia(
 @Serializable
 internal data class FilaDeslizamiento(
     val id: String,
-    val uidOrigen: String,
-    val uidDestino: String,
+    @SerialName("uid_origen") val uidOrigen: String,
+    @SerialName("uid_destino") val uidDestino: String,
     val accion: String,
-    val creadoEn: Long,
+    @SerialName("creado_en") val creadoEn: Long,
 )
 
 @Serializable
 internal data class FilaConversacion(
     val id: String,
     val participantes: List<String> = emptyList(),
-    val creadoEn: Long? = null,
-    val ultimoMensaje: String? = null,
-    val ultimoMensajeEn: Long? = null,
-    val ultimoRemitente: String? = null,
+    @SerialName("creado_en") val creadoEn: Long? = null,
+    @SerialName("ultimo_mensaje") val ultimoMensaje: String? = null,
+    @SerialName("ultimo_mensaje_en") val ultimoMensajeEn: Long? = null,
+    @SerialName("ultimo_remitente") val ultimoRemitente: String? = null,
 )
 
 @Serializable
 internal data class FilaMensaje(
     val id: String,
-    val conversacionId: String,
-    val uidRemitente: String,
+    @SerialName("conversacion_id") val conversacionId: String,
+    @SerialName("uid_remitente") val uidRemitente: String,
     val texto: String,
-    val marcaTemporal: Long,
+    @SerialName("marca_temporal") val marcaTemporal: Long,
 )
 
 internal fun FilaMensaje.aMensaje(): MensajeConversacion = MensajeConversacion(
@@ -177,10 +186,10 @@ internal fun FilaMensaje.aMensaje(): MensajeConversacion = MensajeConversacion(
 @Serializable
 internal data class FilaMensajeInsert(
     val id: String,
-    val conversacionId: String,
-    val uidRemitente: String,
+    @SerialName("conversacion_id") val conversacionId: String,
+    @SerialName("uid_remitente") val uidRemitente: String,
     val texto: String,
-    val marcaTemporal: Long,
+    @SerialName("marca_temporal") val marcaTemporal: Long,
 )
 
 @Serializable
@@ -189,18 +198,18 @@ internal data class FilaTicketInsert(
     val correo: String,
     val mensaje: String,
     val estado: String = "open",
-    val creadoEn: Long,
+    @SerialName("creado_en") val creadoEn: Long,
 )
 
 @Serializable
 internal data class FilaReporte(
     val id: String,
-    val tipoObjetivo: String,
-    val idObjetivo: String,
-    val uidReportante: String,
+    @SerialName("tipo_objetivo") val tipoObjetivo: String,
+    @SerialName("id_objetivo") val idObjetivo: String,
+    @SerialName("uid_reportante") val uidReportante: String,
     val motivo: String,
     val estado: String,
-    val creadoEn: Long,
+    @SerialName("creado_en") val creadoEn: Long,
 )
 
 internal fun FilaReporte.aReporte(): ReporteContenido = ReporteContenido(
@@ -224,10 +233,10 @@ internal fun FilaReporte.aReporte(): ReporteContenido = ReporteContenido(
 @Serializable
 internal data class FilaSolicitud(
     val id: String,
-    val uidOrigen: String,
-    val uidDestino: String,
+    @SerialName("uid_origen") val uidOrigen: String,
+    @SerialName("uid_destino") val uidDestino: String,
     val estado: String,
-    val creadoEn: Long,
+    @SerialName("creado_en") val creadoEn: Long,
 )
 
 internal fun FilaSolicitud.aSolicitud(): SolicitudAmistad = SolicitudAmistad(
@@ -248,7 +257,7 @@ interface RepositorioAutenticacion {
     val estadoAutenticacion: Flow<CuentaAuth?>
     fun cuentaActual(): CuentaAuth?
     suspend fun iniciarSesionCorreo(correo: String, contrasena: String): Result<Unit>
-    suspend fun registrarCorreo(correo: String, contrasena: String): Result<Unit>
+    suspend fun registrarCorreo(correo: String, contrasena: String): Result<ResultadoRegistroCorreo>
     suspend fun actualizarCorreo(nuevoCorreo: String): Result<Unit>
     suspend fun enviarCorreoRestablecerContrasena(): Result<Unit>
     suspend fun enviarCorreoRestablecerContrasena(correo: String): Result<Unit>
@@ -401,12 +410,17 @@ class RepositorioAutenticacionSupabase @Inject constructor(
         }
     }
 
-    override suspend fun registrarCorreo(correo: String, contrasena: String): Result<Unit> = runCatching {
-        auth.signUpWith(Email) {
-            email = correo
-            password = contrasena
+    override suspend fun registrarCorreo(correo: String, contrasena: String): Result<ResultadoRegistroCorreo> =
+        runCatching {
+            val correoTrim = correo.trim()
+            auth.signUpWith(Email) {
+                email = correoTrim
+                password = contrasena
+            }
+            // Tras signUp, si «Confirm email» está desactivado en Supabase hay sesión al instante.
+            val sesionActiva = auth.currentSessionOrNull() != null
+            ResultadoRegistroCorreo(correo = correoTrim, sesionActiva = sesionActiva)
         }
-    }
 
     override suspend fun actualizarCorreo(nuevoCorreo: String): Result<Unit> = runCatching {
         auth.updateUser { email = nuevoCorreo.trim() }
@@ -475,6 +489,14 @@ class RepositorioUsuarioSupabase @Inject constructor(
     }
 
     override suspend fun asegurarDocumentoUsuario(uid: String, correo: String): Result<Unit> = runCatching {
+        runCatching { cliente.auth.refreshCurrentSession() }
+        val authUid = cliente.auth.currentUserOrNull()?.id
+            ?: error(
+                "No hay sesión activa con el servidor. Cierra sesión y vuelve a entrar.",
+            )
+        require(idsAuthCoinciden(uid, authUid)) {
+            "La cuenta activa no coincide con el perfil que estás configurando."
+        }
         val rol = if (correo.equals(BuildConfig.ADMIN_EMAIL, ignoreCase = true)) {
             RolUsuario.ADMINISTRADOR.name.lowercase()
         } else {
@@ -483,17 +505,45 @@ class RepositorioUsuarioSupabase @Inject constructor(
         val existe = cargarUsuario(uid) != null
         val ahora = System.currentTimeMillis()
         if (!existe) {
+            val nombreProvisional = correo.substringBefore("@").trim().ifBlank { "Usuario" }
             val fila = FilaUsuario(
-                id = uid,
+                id = uid.trim(),
                 correo = correo,
-                nombreVisible = correo.substringBefore("@"),
+                nombreVisible = nombreProvisional,
                 zona = "",
                 sobreMi = "",
                 rol = rol,
                 bloqueado = false,
                 creadoEn = ahora,
             )
-            cliente.postgrest.from(Tablas.USUARIOS).insert(fila)
+            runCatching {
+                cliente.postgrest.rpc(
+                    "pawpals_asegurar_mi_usuario",
+                    buildJsonObject {
+                        put("p_correo", correo)
+                        put("p_nombre_visible", nombreProvisional)
+                    },
+                )
+            }
+            if (cargarUsuario(uid) == null) {
+                runCatching {
+                    cliente.postgrest.from(Tablas.USUARIOS).insert(fila)
+                }
+            }
+            if (cargarUsuario(uid) == null) {
+                error(
+                    "Falta crear tu ficha en la base de datos. En Supabase → SQL ejecuta el archivo " +
+                        "supabase/pawpals_rpc_asegurar_usuario.sql del proyecto y vuelve a intentarlo.",
+                )
+            }
+            // RPC inserta con rol «usuario»; si es admin de demo, se ajusta aquí.
+            if (correo.equals(BuildConfig.ADMIN_EMAIL, ignoreCase = true)) {
+                cliente.postgrest.from(Tablas.USUARIOS).update({
+                    set("rol", rol)
+                }) {
+                    filter { eq("id", uid) }
+                }
+            }
         } else if (correo.equals(BuildConfig.ADMIN_EMAIL, ignoreCase = true)) {
             cliente.postgrest.from(Tablas.USUARIOS).update({
                 set("rol", rol)
@@ -511,15 +561,31 @@ class RepositorioUsuarioSupabase @Inject constructor(
         sobreMi: String,
         urlFoto: String?,
     ): Result<Unit> = runCatching {
-        cliente.postgrest.from(Tablas.USUARIOS).update({
-            set("nombre_visible", nombreVisible)
-            set("zona", zona)
-            set("sobre_mi", sobreMi)
-            if (urlFoto != null) {
-                set("url_foto", urlFoto)
+        val id = uid.trim()
+        val rpcOk = runCatching {
+            cliente.postgrest.rpc(
+                "pawpals_actualizar_mi_perfil",
+                buildJsonObject {
+                    put("p_nombre_visible", nombreVisible)
+                    put("p_zona", zona)
+                    put("p_sobre_mi", sobreMi)
+                    if (urlFoto != null) {
+                        put("p_url_foto", urlFoto)
+                    }
+                },
+            )
+        }.isSuccess
+        if (!rpcOk) {
+            cliente.postgrest.from(Tablas.USUARIOS).update({
+                set("nombre_visible", nombreVisible)
+                set("zona", zona)
+                set("sobre_mi", sobreMi)
+                if (urlFoto != null) {
+                    set("url_foto", urlFoto)
+                }
+            }) {
+                filter { eq("id", id) }
             }
-        }) {
-            filter { eq("id", uid) }
         }
         Unit
     }
@@ -620,15 +686,34 @@ class RepositorioPerroSupabase @Inject constructor(
         energia: NivelEnergia,
         sociabilidad: Sociabilidad,
     ): Result<String> = runCatching {
+        val uid = uidDueno.trim()
+        runCatching {
+            cliente.postgrest.rpc(
+                "pawpals_guardar_mi_perro",
+                buildJsonObject {
+                    put("p_nombre", nombre)
+                    put("p_raza", raza)
+                    put("p_edad_anios", edadAnios)
+                    put("p_biografia", biografia)
+                    put("p_energia", energia.name.lowercase())
+                    put("p_sociabilidad", sociabilidad.name.lowercase())
+                    if (urlFoto != null) {
+                        put("p_url_foto", urlFoto)
+                    }
+                },
+            )
+        }
+        cargarPerroDueno(uid)?.id?.let { return@runCatching it }
+
         val existentes = cliente.postgrest.from(Tablas.PERROS).select {
-            filter { eq("uid_dueno", uidDueno) }
+            filter { eq("uid_dueno", uid) }
             limit(1)
         }.decodeList<FilaPerro>()
         val id = existentes.firstOrNull()?.id ?: UUID.randomUUID().toString()
         val ahora = System.currentTimeMillis()
         val fila = FilaPerro(
             id = id,
-            uidDueno = uidDueno,
+            uidDueno = uid,
             nombre = nombre,
             raza = raza,
             edadAnios = edadAnios.coerceAtLeast(1),
@@ -638,10 +723,25 @@ class RepositorioPerroSupabase @Inject constructor(
             sociabilidad = sociabilidad.name.lowercase(),
             actualizadoEn = ahora,
         )
-        cliente.postgrest.from(Tablas.PERROS).upsert(fila) {
-            onConflict = "id"
+        if (existentes.isEmpty()) {
+            cliente.postgrest.from(Tablas.PERROS).insert(fila)
+        } else {
+            cliente.postgrest.from(Tablas.PERROS).update({
+                set("nombre", nombre)
+                set("raza", raza)
+                set("edad_anios", edadAnios.coerceAtLeast(1))
+                set("biografia", biografia)
+                if (urlFoto != null) {
+                    set("url_foto", urlFoto)
+                }
+                set("energia", energia.name.lowercase())
+                set("sociabilidad", sociabilidad.name.lowercase())
+                set("actualizado_en", ahora)
+            }) {
+                filter { eq("id", id) }
+            }
         }
-        id
+        cargarPerroDueno(uid)?.id ?: id
     }
 
     override suspend fun obtenerTodosPerros(): Result<List<PerfilPerro>> = runCatching {
