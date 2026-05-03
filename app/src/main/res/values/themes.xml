@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.PawPals" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFFDF8</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/pawpals_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.PawPals.Main</item>
+    </style>
+    <style name="Theme.PawPals.Main" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

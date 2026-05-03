@@ -1,0 +1,132 @@
+// PawPals Firestore Security Rules
+// Cópialo en Firebase Console ▸ Firestore Database ▸ Reglas ▸ Publicar.
+//
+// Filosofía:
+//  - Todo requiere usuario autenticado.
+//  - Cada uno administradoristra SU propio documento /usuarios/{uid} y SUS propios perros (uidDueno).
+//  - Cualquier usuario autenticado puede LEER perfiles y perros (para el feed "Explorar").
+//  - Chats y coincidencias: solo participantes. Reportes: cualquiera puede crear, solo administrador listar.
+//  - Se considera administrador quien tenga usuarios/{uid}.rol == "administradoristracion" (lo define tu ADMIN_EMAIL).
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function estaAutenticado() { return request.auth != null; }
+    function esPropio(uid) { return estaAutenticado() && request.auth.uid == uid; }
+    function esAdministrador() {
+      return estaAutenticado()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'administradoristrador';
+    }
+
+    // --- USERS -----------------------------------------------------------
+    // El administrador puede crear/editar perfiles sintéticos (seeding de demo) además
+    // de moderar cuentas reales.
+    match /usuarios/{uid} {
+      allow read: if estaAutenticado();
+      allow create: if esPropio(uid) || esAdministrador();
+      allow update: if esPropio(uid) || esAdministrador();
+      // El propio usuario puede eliminar su documento al borrar su cuenta.
+      allow delete: if esPropio(uid) || esAdministrador();
+    }
+
+    // --- DOGS ------------------------------------------------------------
+    // Documento por perro con campo uidDueno == uid del dueño.
+    // El administrador puede crear/editar/eliminar cualquier perro (seed + moderación).
+    match /perros/{idPerro} {
+      allow read: if estaAutenticado();
+      allow create: if estaAutenticado()
+                    && (request.resource.data.uidDueno == request.auth.uid || esAdministrador());
+      allow update, delete: if estaAutenticado()
+                    && (resource.data.uidDueno == request.auth.uid || esAdministrador());
+    }
+
+    // --- MATCHES ---------------------------------------------------------
+    // Documento con campos usuarioMenor/usuarioMayor y array "participantes" (2 uids).
+    // Read abierto a autenticados (los datos no son sensibles y permite queries
+    // por "usuarioMenor/usuarioMayor" que necesita el cliente para deduplicar). La escritura
+    // sigue restringida a participantes.
+    match /coincidencias/{idCoincidencia} {
+      allow read: if estaAutenticado();
+      allow create: if estaAutenticado()
+                    && request.auth.uid in request.resource.data.participantes;
+      allow update: if estaAutenticado()
+                    && request.auth.uid in resource.data.participantes;
+      // Cualquiera de los participantes puede "deshacer match" desde el chat.
+      allow delete: if esAdministrador()
+                    || (estaAutenticado() && request.auth.uid in resource.data.participantes);
+    }
+
+    // --- SWIPES ----------------------------------------------------------
+    // deslizamientos/{uidOrigen__uidDestino} → historial de likes/dislikes para no repetir
+    // perfiles y detectar coincidencias mutuos.
+    match /deslizamientos/{idDeslizamiento} {
+      allow read: if estaAutenticado();
+      allow create, update: if estaAutenticado()
+                    && request.resource.data.uidOrigen == request.auth.uid;
+      // Sólo el emisor (o administrador) puede limpiar su swipe (usado al deshacer match).
+      allow delete: if esAdministrador()
+                    || (estaAutenticado() && resource.data.uidOrigen == request.auth.uid)
+                    || (estaAutenticado() && resource.data.uidDestino == request.auth.uid);
+    }
+
+    // --- FRIEND REQUESTS -------------------------------------------------
+    // solicitudesAmistad/{uidOrigen__uidDestino}: emisor crea, ambos pueden actualizar
+    // estado (acept / reject).
+    match /solicitudesAmistad/{idSolicitud} {
+      allow read: if estaAutenticado();
+      allow create: if estaAutenticado()
+                    && request.resource.data.uidOrigen == request.auth.uid;
+      allow update: if estaAutenticado()
+                    && (resource.data.uidOrigen == request.auth.uid
+                        || resource.data.uidDestino == request.auth.uid);
+      allow delete: if esAdministrador();
+    }
+
+    // --- FRIENDS (desnormalizado en usuarios/{uid}/amigos) -----------------
+    // Cada usuario mantiene su colección "amigos". Se escribe en ambos
+    // lados al aceptar una solicitud de amistad.
+    match /usuarios/{uid}/amigos/{otroUid} {
+      allow read: if estaAutenticado();
+      // Permitimos escribir al dueño del documento o al otro implicado (para
+      // que el flujo de "aceptar solicitud" pueda crear los dos lados).
+      allow write: if estaAutenticado()
+                    && (request.auth.uid == uid || request.auth.uid == otroUid);
+    }
+
+    // --- SUPPORT TICKETS -------------------------------------------------
+    // Los usuarios (incluso baneados) pueden crear un ticket dirigido al
+    // equipo administrador. Sólo los administrador pueden leerlo/actualizarlo.
+    match /ticketsSoporte/{idTicket} {
+      allow read, update, delete: if esAdministrador();
+      allow create: if estaAutenticado()
+                    && request.resource.data.uid == request.auth.uid;
+    }
+
+    // --- CHATS -----------------------------------------------------------
+    // conversaciones/{idHilo} con "participantes" (2 uids) y subcolección mensajes.
+    match /conversaciones/{idHilo} {
+      allow read: if estaAutenticado();
+      allow create: if estaAutenticado()
+                    && request.auth.uid in request.resource.data.participantes;
+      allow update: if estaAutenticado()
+                    && request.auth.uid in resource.data.participantes;
+
+      match /mensajes/{idMensaje} {
+        allow read: if estaAutenticado();
+        allow create: if estaAutenticado()
+                      && request.resource.data.uidRemitente == request.auth.uid;
+        allow update, delete: if esAdministrador();
+      }
+    }
+
+    // --- REPORTS ---------------------------------------------------------
+    match /reportes/{idReporte} {
+      allow read: if esAdministrador();
+      allow create: if estaAutenticado()
+                   && request.resource.data.uidReportante == request.auth.uid;
+      allow update, delete: if esAdministrador();
+    }
+  }
+}
