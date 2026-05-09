@@ -34,7 +34,7 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 
         buildConfigField("String", "ADMIN_EMAIL", "\"admin@pawpals.app\"")
-        // Demo académico: contraseña del usuario admin (Auth Supabase + BuildConfig) para pruebas locales.
+        // clave del admin para probar la app en local
         buildConfigField("String", "ADMIN_DEMO_PASSWORD", "\"AdminPawpals2026!\"")
     }
 

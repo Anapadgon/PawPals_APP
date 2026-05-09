@@ -23,7 +23,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,10 +35,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 
+// rutas internas de la app; asi no se escriben strings sueltos por las pantallas
 object DestinosPaw {
     const val ONBOARDING_INTRO = "bienvenida_intro"
     const val LOGIN = "inicio_sesion"
-    const val REGISTER = "registro"
     const val ONBOARDING_HUMAN = "bienvenida_humano"
     const val ONBOARDING_DOG = "bienvenida_perro"
     const val EXPLORAR = "explorar"
@@ -50,7 +49,6 @@ object DestinosPaw {
     const val MATCH_RESULT = "resultado_coincidencia/{otroUid}"
     const val CHAT_THREAD = "conversacion/{otroUid}"
     const val REPORT = "reporte/{tipoObjetivo}/{idObjetivo}"
-    const val ADMIN = "administradoristracion"
 
     fun conversacionThread(otroUid: String) = "conversacion/$otroUid"
     fun coincidenciaResult(otroUid: String) = "resultado_coincidencia/$otroUid"
@@ -58,9 +56,9 @@ object DestinosPaw {
 }
 
 @Composable
+// contenedor de la app cuando el usuario ya tiene sesion y perfil completo
 fun ContenedorPrincipalUsuario(
     miUid: String,
-    nombreVisible: String,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
@@ -87,6 +85,7 @@ fun ContenedorPrincipalUsuario(
         DestinosPaw.PASEOS,
         DestinosPaw.PROFILE,
     )
+    // la barra inferior solo aparece en las pestanas principales
     val mostrarBarraInferior = rutaActual in rutasPestanas
 
     Scaffold(
@@ -207,12 +206,12 @@ fun ContenedorPrincipalUsuario(
 }
 
 @Composable
+// decide que flujo se muestra segun sesion, bloqueo, admin u onboarding
 fun AnfitrionNavegacionRaiz(
     modifier: Modifier = Modifier,
     rootViewModel: ModeloVistaRaiz = hiltViewModel(),
 ) {
     val sesion by rootViewModel.estadoSesion.collectAsStateWithLifecycle()
-    val bienvenidaHecha by rootViewModel.bienvenidaCompletada.collectAsStateWithLifecycle()
 
     when (val s = sesion) {
         EstadoUiSesion.Cargando -> {
@@ -222,39 +221,29 @@ fun AnfitrionNavegacionRaiz(
         }
         EstadoUiSesion.SinSesion -> {
             val navController = rememberNavController()
-            key(bienvenidaHecha) {
-                NavHost(
-                    navController = navController,
-                    startDestination = if (bienvenidaHecha) {
-                        DestinosPaw.LOGIN
-                    } else {
-                        DestinosPaw.ONBOARDING_INTRO
-                    },
-                    modifier = modifier,
-                ) {
-                    composable(DestinosPaw.ONBOARDING_INTRO) {
-                        PantallaBienvenida(
-                            onContinue = {
-                                rootViewModel.completarBienvenida()
-                                navController.navigate(DestinosPaw.LOGIN) {
-                                    popUpTo(DestinosPaw.ONBOARDING_INTRO) { inclusive = true }
-                                }
-                            },
-                        )
-                    }
-                    composable(DestinosPaw.LOGIN) {
-                        PantallaInicioSesion(
-                            onGoRegister = { navController.navigate(DestinosPaw.REGISTER) },
-                        )
-                    }
-                    composable(DestinosPaw.REGISTER) {
-                        PantallaRegistro(onBack = { navController.popBackStack() })
-                    }
+            NavHost(
+                navController = navController,
+                // sin sesion siempre se entra por bienvenida, no por login
+                startDestination = DestinosPaw.ONBOARDING_INTRO,
+                modifier = modifier,
+            ) {
+                composable(DestinosPaw.ONBOARDING_INTRO) {
+                    PantallaBienvenida(
+                        onContinue = {
+                            navController.navigate(DestinosPaw.LOGIN) {
+                                popUpTo(DestinosPaw.ONBOARDING_INTRO) { inclusive = true }
+                            }
+                        },
+                    )
+                }
+                composable(DestinosPaw.LOGIN) {
+                    PantallaInicioSesion()
                 }
             }
         }
         is EstadoUiSesion.SesionUsuario -> {
             val perfil = s.perfil
+            // sin estos datos basicos no se abre la app principal todavia
             val necesitaConfiguracionPerfil = perfil == null ||
                 perfil.nombreVisible.isBlank() ||
                 perfil.zona.isBlank()
@@ -285,11 +274,8 @@ fun AnfitrionNavegacionRaiz(
                     }
                 }
             } else {
-                val nombre = perfil.nombreVisible.takeIf { it.isNotBlank() }
-                    ?: s.cuenta.correo?.substringBefore("@").orEmpty().ifBlank { "Amigo" }
                 ContenedorPrincipalUsuario(
                     miUid = s.cuenta.uid,
-                    nombreVisible = nombre,
                     modifier = modifier,
                 )
             }

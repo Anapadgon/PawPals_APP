@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
@@ -30,7 +31,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Compara uids de Supabase Auth (p. ej. con o sin normalizar guiones). */
+// compara ids aunque vengan con pequenas diferencias de formato
 private fun idsAuthCoinciden(uidParametro: String, uidDeSesion: String): Boolean {
     val a = uidParametro.trim()
     val b = uidDeSesion.trim()
@@ -251,7 +252,7 @@ internal fun FilaSolicitud.aSolicitud(): SolicitudAmistad = SolicitudAmistad(
     creadoEn = creadoEn,
 )
 
-// --- Contratos ---
+// contratos que usan los viewmodels; asi la ui no depende de supabase directamente
 
 interface RepositorioAutenticacion {
     val estadoAutenticacion: Flow<CuentaAuth?>
@@ -379,9 +380,10 @@ interface RepositorioEstadisticasAdministracion {
     suspend fun cargarEstadisticas(): Result<EstadisticasAdministracion>
 }
 
-// --- Implementaciones Supabase ---
+// implementaciones reales contra supabase
 
 @Singleton
+// maneja login, registro, cambios de cuenta y cierre de sesion
 class RepositorioAutenticacionSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioAutenticacion {
@@ -389,14 +391,18 @@ class RepositorioAutenticacionSupabase @Inject constructor(
     private val auth: Auth get() = cliente.auth
 
     override val estadoAutenticacion: Flow<CuentaAuth?> =
-        auth.sessionStatus.map { st ->
+        auth.sessionStatus.transform { st ->
+            // mientras supabase recupera la sesion guardada no emitimos "sin cuenta"
+            // asi se evita mostrar bienvenida o login durante un instante
             when (st) {
-                is SessionStatus.Authenticated ->
-                    st.session.user?.let { CuentaAuth(uid = it.id, correo = it.email) }
-                is SessionStatus.NotAuthenticated -> null
-                is SessionStatus.RefreshFailure ->
-                    auth.currentUserOrNull()?.let { CuentaAuth(uid = it.id, correo = it.email) }
-                SessionStatus.Initializing -> null
+                SessionStatus.Initializing -> Unit
+                is SessionStatus.Authenticated -> emit(
+                    st.session.user?.let { CuentaAuth(uid = it.id, correo = it.email) },
+                )
+                is SessionStatus.NotAuthenticated -> emit(null)
+                is SessionStatus.RefreshFailure -> emit(
+                    auth.currentUserOrNull()?.let { CuentaAuth(uid = it.id, correo = it.email) },
+                )
             }
         }.distinctUntilChanged()
 
@@ -417,7 +423,7 @@ class RepositorioAutenticacionSupabase @Inject constructor(
                 email = correoTrim
                 password = contrasena
             }
-            // Tras signUp, si «Confirm email» está desactivado en Supabase hay sesión al instante.
+            // si supabase no pide confirmar correo, el registro deja la sesion abierta
             val sesionActiva = auth.currentSessionOrNull() != null
             ResultadoRegistroCorreo(correo = correoTrim, sesionActiva = sesionActiva)
         }
@@ -469,6 +475,7 @@ class RepositorioAutenticacionSupabase @Inject constructor(
 }
 
 @Singleton
+// lee y actualiza la ficha humana del usuario
 class RepositorioUsuarioSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioUsuario {
@@ -536,7 +543,7 @@ class RepositorioUsuarioSupabase @Inject constructor(
                         "supabase/pawpals_rpc_asegurar_usuario.sql del proyecto y vuelve a intentarlo.",
                 )
             }
-            // RPC inserta con rol «usuario»; si es admin de demo, se ajusta aquí.
+            // la rpc crea usuario normal; si es el admin de demo se corrige despues
             if (correo.equals(BuildConfig.ADMIN_EMAIL, ignoreCase = true)) {
                 cliente.postgrest.from(Tablas.USUARIOS).update({
                     set("rol", rol)
@@ -654,6 +661,7 @@ class RepositorioUsuarioSupabase @Inject constructor(
 }
 
 @Singleton
+// guarda el perfil del perro y lo mantiene ligado a su dueno
 class RepositorioPerroSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioPerro {
@@ -766,6 +774,7 @@ class RepositorioPerroSupabase @Inject constructor(
 }
 
 @Singleton
+// gestiona las coincidencias ya creadas entre dos usuarios
 class RepositorioCoincidenciaSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioCoincidencia {
@@ -773,11 +782,13 @@ class RepositorioCoincidenciaSupabase @Inject constructor(
     override fun observarCoincidenciasDeUsuario(uid: String): Flow<List<Coincidencia>> = callbackFlow {
         val job = launch {
             while (isActive) {
-                val list = cliente.postgrest.from(Tablas.COINCIDENCIAS).select {
-                    filter { cs("participantes", listOf(uid)) }
-                }.decodeList<FilaCoincidencia>()
-                    .map { it.aCoincidencia() }
-                    .sortedByDescending { it.creadoEn }
+                val list = runCatching {
+                    cliente.postgrest.from(Tablas.COINCIDENCIAS).select {
+                        filter { cs("participantes", listOf(uid)) }
+                    }.decodeList<FilaCoincidencia>()
+                        .map { it.aCoincidencia() }
+                        .sortedByDescending { it.creadoEn }
+                }.getOrElse { emptyList() }
                 trySend(list)
                 delay(2000)
             }
@@ -865,6 +876,7 @@ class RepositorioCoincidenciaSupabase @Inject constructor(
 }
 
 @Singleton
+// mensajes sencillos entre usuarios que ya tienen conversacion
 class RepositorioConversacionSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioConversacion {
@@ -872,11 +884,13 @@ class RepositorioConversacionSupabase @Inject constructor(
     override fun observarMensajes(idConversacion: String): Flow<List<MensajeConversacion>> = callbackFlow {
         val job = launch {
             while (isActive) {
-                val list = cliente.postgrest.from(Tablas.MENSAJES).select {
-                    filter { eq("conversacion_id", idConversacion) }
-                    order("marca_temporal", Order.ASCENDING)
-                    limit(200)
-                }.decodeList<FilaMensaje>().map { it.aMensaje() }
+                val list = runCatching {
+                    cliente.postgrest.from(Tablas.MENSAJES).select {
+                        filter { eq("conversacion_id", idConversacion) }
+                        order("marca_temporal", Order.ASCENDING)
+                        limit(200)
+                    }.decodeList<FilaMensaje>().map { it.aMensaje() }
+                }.getOrElse { emptyList() }
                 trySend(list)
                 delay(1200)
             }
@@ -929,6 +943,7 @@ class RepositorioConversacionSupabase @Inject constructor(
 }
 
 @Singleton
+// registra los swipes y crea coincidencia cuando el gusto es mutuo
 class RepositorioDeslizamientoSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioDeslizamiento {
@@ -1031,6 +1046,7 @@ class RepositorioDeslizamientoSupabase @Inject constructor(
 }
 
 @Singleton
+// convierte solicitudes aceptadas en amistad real en ambos sentidos
 class RepositorioAmistadSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioAmistad {
@@ -1038,12 +1054,14 @@ class RepositorioAmistadSupabase @Inject constructor(
     override fun observarSolicitudesEntrantes(miUid: String): Flow<List<SolicitudAmistad>> = callbackFlow {
         val job = launch {
             while (isActive) {
-                val list = cliente.postgrest.from(Tablas.SOLICITUDES_AMISTAD).select {
-                    filter {
-                        eq("uid_destino", miUid)
-                        eq("estado", EstadoSolicitudAmistad.PENDIENTE.name.lowercase())
-                    }
-                }.decodeList<FilaSolicitud>().map { it.aSolicitud() }
+                val list = runCatching {
+                    cliente.postgrest.from(Tablas.SOLICITUDES_AMISTAD).select {
+                        filter {
+                            eq("uid_destino", miUid)
+                            eq("estado", EstadoSolicitudAmistad.PENDIENTE.name.lowercase())
+                        }
+                    }.decodeList<FilaSolicitud>().map { it.aSolicitud() }
+                }.getOrElse { emptyList() }
                 trySend(list)
                 delay(2500)
             }
@@ -1056,15 +1074,18 @@ class RepositorioAmistadSupabase @Inject constructor(
         val idBA = idSolicitud(otroUid, miUid)
         val job = launch {
             while (isActive) {
-                val list = cliente.postgrest.from(Tablas.SOLICITUDES_AMISTAD).select {
-                    filter {
-                        or {
-                            eq("id", idAB)
-                            eq("id", idBA)
+                val solicitud = runCatching {
+                    val list = cliente.postgrest.from(Tablas.SOLICITUDES_AMISTAD).select {
+                        filter {
+                            or {
+                                eq("id", idAB)
+                                eq("id", idBA)
+                            }
                         }
-                    }
-                }.decodeList<FilaSolicitud>().map { it.aSolicitud() }
-                trySend(list.maxByOrNull { it.creadoEn })
+                    }.decodeList<FilaSolicitud>().map { it.aSolicitud() }
+                    list.maxByOrNull { it.creadoEn }
+                }.getOrNull()
+                trySend(solicitud)
                 delay(2500)
             }
         }
@@ -1074,10 +1095,12 @@ class RepositorioAmistadSupabase @Inject constructor(
     override fun observarUidsAmigos(miUid: String): Flow<Set<String>> = callbackFlow {
         val job = launch {
             while (isActive) {
-                val uids = cliente.postgrest.from(Tablas.AMIGOS).select {
-                    filter { eq("usuario_id", miUid) }
-                    limit(500)
-                }.decodeList<AmigoFila>().map { it.amigoId }.toSet()
+                val uids = runCatching {
+                    cliente.postgrest.from(Tablas.AMIGOS).select {
+                        filter { eq("usuario_id", miUid) }
+                        limit(500)
+                    }.decodeList<AmigoFila>().map { it.amigoId }.toSet()
+                }.getOrElse { emptySet() }
                 trySend(uids)
                 delay(2500)
             }
@@ -1203,13 +1226,17 @@ class RepositorioAmistadSupabase @Inject constructor(
 
     @Serializable
     private data class AmigoFila(
+        @SerialName("usuario_id")
         val usuarioId: String,
+        @SerialName("amigo_id")
         val amigoId: String,
+        @SerialName("creado_en")
         val creadoEn: Long = 0,
     )
 }
 
 @Singleton
+// guarda reportes para que el panel admin los pueda revisar
 class RepositorioModeracionSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioModeracion {
@@ -1261,6 +1288,7 @@ class RepositorioModeracionSupabase @Inject constructor(
 }
 
 @Singleton
+// sube imagenes al bucket publico y devuelve su url
 class RepositorioAlmacenamientoSupabase @Inject constructor(
     private val cliente: SupabaseClient,
     @ApplicationContext private val context: Context,
@@ -1284,6 +1312,7 @@ class RepositorioAlmacenamientoSupabase @Inject constructor(
 }
 
 @Singleton
+// envia mensajes de soporte desde cuentas bloqueadas
 class RepositorioSoporteSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioSoporte {
@@ -1306,6 +1335,7 @@ class RepositorioSoporteSupabase @Inject constructor(
 }
 
 @Singleton
+// crea perfiles falsos para probar explorar, mapa y estadisticas
 class RepositorioDatosDemoSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioDatosDemo {
@@ -1512,6 +1542,7 @@ class RepositorioDatosDemoSupabase @Inject constructor(
 }
 
 @Singleton
+// calcula numeros simples para el resumen del panel admin
 class RepositorioEstadisticasAdministracionSupabase @Inject constructor(
     private val cliente: SupabaseClient,
 ) : RepositorioEstadisticasAdministracion {

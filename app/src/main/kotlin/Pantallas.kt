@@ -50,7 +50,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pets
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -113,6 +112,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+// vista del admin para usuarios, reportes y datos de prueba
 fun PantallaAdministracion(
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
@@ -126,7 +126,7 @@ fun PantallaAdministracion(
         modifier = modifier.fillMaxSize(),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Panel administradoristrador") },
+                title = { Text("Panel administrador") },
                 actions = {
                     IconButton(onClick = onSignOut) {
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Salir")
@@ -193,7 +193,7 @@ private fun EstadisticasAdministracionTab(estado: EstadoUiAdministracion, vm: Mo
         }
         val estadisticas = estado.estadisticas
         if (estadisticas != null) {
-            TituloSeccion("Totales (demo en cliente)")
+            TituloSeccion("Resumen")
             Text("Usuarios: ${estadisticas.numeroUsuarios}")
             Text("Perros: ${estadisticas.numeroPerros}")
             Text("Coincidencias: ${estadisticas.numeroCoincidencias}")
@@ -323,11 +323,8 @@ private fun AdminModerationTab(estado: EstadoUiAdministracion, vm: ModeloVistaAd
     }
 }
 
-/**
- * Maqueta 11 — Ajustes: notificaciones, privacidad y cuenta.
- * Los cambios de correo/contraseña se aplican vía Supabase Auth.
- */
 @Composable
+// ajustes de cuenta, notificaciones, privacidad y acciones sensibles
 fun PantallaAjustes(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -393,8 +390,7 @@ fun PantallaAjustes(
                 subtitulo = "Oculta tu ubicación cuando no estás paseando",
                 checked = estado.ubicacionSoloDurantePaseo,
                 onToggle = { nuevoValor ->
-                    // Si el usuario intenta DESACTIVAR la privacidad (= compartir siempre),
-                    // enseñamos un aviso con la información de qué se comparte.
+                    // si el usuario quiere compartir siempre, antes se muestra un aviso
                     if (!nuevoValor && estado.ubicacionSoloDurantePaseo) {
                         valorUbicacionPendiente = nuevoValor
                         mostrarAvisoUbicacion = true
@@ -829,18 +825,8 @@ private fun DialogoEliminarCuenta(
     )
 }
 
-/** Botón con estilo primary reutilizado de design system (no usado aquí, pero expuesto por ergonomía). */
 @Composable
-@Suppress("UnusedPrivateMember")
-private fun CtaPrincipal(texto: String, onClick: () -> Unit, habilitado: Boolean = true) {
-    BotonPrimarioPaw(texto = texto, onClick = onClick, habilitado = habilitado)
-}
-
-/**
- * Splash/Intro (maqueta 01): gradiente coral + logo + CTAs.
- * Se muestra solo la primera vez (flag en DataStore).
- */
-@Composable
+// primera pantalla para usuarios sin sesion cuando aun no han visto la intro
 fun PantallaBienvenida(
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
@@ -917,7 +903,7 @@ fun PantallaBienvenida(
 
 @Composable
 private fun BotonPrimarioPawOnGradient(onClick: () -> Unit) {
-    // Botón blanco sobre fondo coral (reutiliza BotonPrimarioPaw con inversión de colores local)
+    // boton blanco sobre el fondo coral
     BotonPrimarioPaw(
         texto = "Comenzar",
         onClick = onClick,
@@ -925,13 +911,8 @@ private fun BotonPrimarioPawOnGradient(onClick: () -> Unit) {
     )
 }
 
-/**
- * Usuario bloqueado por moderación (documento `usuarios/{uid}.bloqueado == true`).
- *
- * Ofrece un formulario para contactar con los administradoristradores: el mensaje se
- * guarda en `supportTickets` y cualquier administrador puede leerlo desde el panel.
- */
 @Composable
+// aviso para cuentas bloqueadas con opcion de contactar soporte
 fun PantallaBloqueado(
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1037,12 +1018,8 @@ fun PantallaBloqueado(
     }
 }
 
-/**
- * Maqueta 08 — Conversación individual con burbujas (incoming gris, outgoing coral).
- * Incluye menú contextual (reportar / deshacer coincidencia / añadir como amigo) y un
- * banner para aceptar/rechazar solicitudes de amistad entrantes.
- */
 @Composable
+// chat entre dos usuarios, con acciones de amistad y reporte
 fun PantallaConversacion(
     miUid: String,
     onBack: () -> Unit,
@@ -1079,16 +1056,17 @@ fun PantallaConversacion(
             nombrePerro = estado.nombrePerroOtro,
             urlFoto = estado.urlFotoPerroOtro ?: estado.urlFotoUsuarioOtro,
             puedeAnadirAmigo = !estado.yaSonAmigos &&
-                (estado.solicitudPendiente == null ||
-                    estado.solicitudPendiente?.estado == EstadoSolicitudAmistad.RECHAZADA),
+                estado.solicitudPendiente?.estado != EstadoSolicitudAmistad.PENDIENTE,
+            yaSonAmigos = estado.yaSonAmigos,
             onBack = onBack,
             alReportar = { onOpenReport("usuario", viewModel.otroUidVistaPrevia) },
             alPulsarAnadirAmigo = { viewModel.solicitarAmistad(miUid) },
+            alEliminarAmigo = { viewModel.eliminarAmigo(miUid) },
             alDeshacerCoincidencia = { mostrarDialogoDeshacer = true },
             alAbrirPerfil = { mostrarDialogoPerfil = true },
         )
 
-        // Banner solicitud pendiente: la aceptamos desde aquí sin salir del conversación.
+        // si llega una solicitud, se puede responder sin salir del chat
         val req = estado.solicitudPendiente
         if (req != null && req.estado == EstadoSolicitudAmistad.PENDIENTE) {
             val soyDestinatario = req.uidDestino == miUid
@@ -1260,9 +1238,11 @@ private fun CabeceraConversacion(
     nombrePerro: String,
     urlFoto: String?,
     puedeAnadirAmigo: Boolean,
+    yaSonAmigos: Boolean,
     onBack: () -> Unit,
     alReportar: () -> Unit,
     alPulsarAnadirAmigo: () -> Unit,
+    alEliminarAmigo: () -> Unit,
     alDeshacerCoincidencia: () -> Unit,
     alAbrirPerfil: () -> Unit,
 ) {
@@ -1278,7 +1258,7 @@ private fun CabeceraConversacion(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
             }
             Row(
-                // Todo el bloque avatar + nombre es una zona táctil para abrir
+                // el avatar y el nombre abren la ficha del perfil
                 // la vista previa del perfil del otro usuario.
                 modifier = Modifier
                     .weight(1f)
@@ -1335,6 +1315,15 @@ private fun CabeceraConversacion(
                             onClick = {
                                 menuAbierto = false
                                 alPulsarAnadirAmigo()
+                            },
+                        )
+                    }
+                    if (yaSonAmigos) {
+                        DropdownMenuItem(
+                            text = { Text("Eliminar de amigos") },
+                            onClick = {
+                                menuAbierto = false
+                                alEliminarAmigo()
                             },
                         )
                     }
@@ -1398,12 +1387,7 @@ private fun BurbujaMensaje(
     }
 }
 
-/**
- * Popup con vista previa del perfil del otro usuario (foto de persona + foto
- * del perro, datos básicos y contadores). Se abre al pulsar la cabecera del
- * conversación. No permite editar nada — es una "tarjeta de presentación" para saber
- * con quién se está hablando.
- */
+// vista rapida del perfil de la otra persona dentro del chat
 @Composable
 private fun DialogoVistaPreviaPerfil(
     usuario: PerfilUsuario?,
@@ -1527,13 +1511,6 @@ private fun DialogoVistaPreviaPerfil(
                             fondoAcento = SuccessSoft,
                             modifier = Modifier.weight(1f),
                         )
-                        TarjetaEstadisticaPerfil(
-                            etiqueta = "Coincidencias",
-                            valor = u.numeroCoincidencias,
-                            colorAcento = InfoBlue,
-                            fondoAcento = InfoSoft,
-                            modifier = Modifier.weight(1f),
-                        )
                     }
                 }
             }
@@ -1644,11 +1621,8 @@ private fun formatTime(ts: Long): String {
     return timeFormatter.format(Date(ts))
 }
 
-/**
- * Explorar perfiles (maqueta 05). Tarjeta estilo Tinder con acciones rechazar/super/me gusta.
- * Tras un me gusta se lanza una navegación al celebración de coincidencia (06).
- */
 @Composable
+// pantalla principal para descubrir perros y hacer swipe
 fun PantallaExplorar(
     miUid: String,
     onOpenCoincidencia: (String) -> Unit,
@@ -1809,7 +1783,7 @@ private fun VistaTarjetaExplorar(card: TarjetaExplorar) {
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
     ) {
         Column {
-            // Área de foto (placeholder gradiente con icono pata)
+            // zona de foto con fondo de reserva
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1820,7 +1794,7 @@ private fun VistaTarjetaExplorar(card: TarjetaExplorar) {
                         ),
                     ),
             ) {
-                // Chips de atributos superpuestos
+                // chips con los rasgos del perro
                 Row(
                     modifier = Modifier
                         .padding(16.dp)
@@ -1945,22 +1919,16 @@ private fun EmptyExplorarState() {
     }
 }
 
-/**
- * Login y registro unificados en una sola pantalla con tabs (maqueta 02).
- * Mantiene la navegación externa por compatibilidad (onGoRegister) pero ya no es imprescindible.
- */
 @Composable
+// formulario de acceso y enlace al registro
 fun PantallaInicioSesion(
-    onGoRegister: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ModeloVistaAutenticacion = hiltViewModel(),
 ) {
     var tab by remember { mutableStateOf(AuthTab.LOGIN) }
-    var method by remember { mutableStateOf(AuthMethod.EMAIL) }
     val estado by viewModel.estado.collectAsStateWithLifecycle()
 
     var correo by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var showResetDialog by remember { mutableStateOf(false) }
 
@@ -1976,7 +1944,7 @@ fun PantallaInicioSesion(
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        // Cabecera con gradiente coral
+        // cabecera con el color principal de la app
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2029,38 +1997,13 @@ fun PantallaInicioSesion(
             AuthTabSwitcher(actual = tab, onSelect = { tab = it })
             Spacer(Modifier.height(20.dp))
 
-            AuthMethodRow(
-                method = method,
-                onSelect = { method = it },
+            CampoContornoPaw(
+                valor = correo,
+                alCambiarValor = { correo = it },
+                etiqueta = "Correo electrónico",
+                keyboardType = KeyboardType.Email,
+                marcador = "usuario@correo.com",
             )
-            Spacer(Modifier.height(16.dp))
-
-            when (method) {
-                AuthMethod.EMAIL -> {
-                    CampoContornoPaw(
-                        valor = correo,
-                        alCambiarValor = { correo = it },
-                        etiqueta = "Correo electrónico",
-                        keyboardType = KeyboardType.Email,
-                        marcador = "usuario@correo.com",
-                    )
-                }
-                AuthMethod.PHONE -> {
-                    CampoContornoPaw(
-                        valor = phone,
-                        alCambiarValor = { phone = it },
-                        etiqueta = "Número de teléfono",
-                        keyboardType = KeyboardType.Phone,
-                        marcador = "+34 600 00 00 00",
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "SMS no disponible en la demo: usa el acceso por correo.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
             Spacer(Modifier.height(10.dp))
             CampoContornoPaw(
                 valor = contrasena,
@@ -2101,15 +2044,13 @@ fun PantallaInicioSesion(
                 BotonPrimarioPaw(
                     texto = if (tab == AuthTab.LOGIN) "Iniciar sesión" else "Crear cuenta",
                     onClick = {
-                        if (method != AuthMethod.EMAIL) return@BotonPrimarioPaw
                         if (tab == AuthTab.LOGIN) {
                             viewModel.iniciarSesion(correo, contrasena)
                         } else {
                             viewModel.registrar(correo, contrasena)
                         }
                     },
-                    habilitado = method == AuthMethod.EMAIL &&
-                        correo.isNotBlank() && contrasena.length >= 6,
+                    habilitado = correo.isNotBlank() && contrasena.length >= 6,
                 )
             }
 
@@ -2205,7 +2146,6 @@ private fun PasswordResetDialog(
 }
 
 private enum class AuthTab { LOGIN, REGISTER }
-private enum class AuthMethod { EMAIL, PHONE }
 
 @Composable
 private fun AuthTabSwitcher(actual: AuthTab, onSelect: (AuthTab) -> Unit) {
@@ -2262,67 +2202,7 @@ private fun TabPill(
 }
 
 @Composable
-private fun AuthMethodRow(method: AuthMethod, onSelect: (AuthMethod) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        MethodCard(
-            icon = { Icon(Icons.Filled.Email, null, tint = CoralPrimary) },
-            titulo = "Correo electrónico",
-            subtitulo = "Recibirás un correo de verificación",
-            seleccionado = method == AuthMethod.EMAIL,
-            onClick = { onSelect(AuthMethod.EMAIL) },
-        )
-        MethodCard(
-            icon = { Icon(Icons.Filled.Phone, null, tint = CoralPrimary) },
-            titulo = "Teléfono",
-            subtitulo = "Recibirás un SMS de verificación",
-            seleccionado = method == AuthMethod.PHONE,
-            onClick = { onSelect(AuthMethod.PHONE) },
-        )
-    }
-}
-
-@Composable
-private fun MethodCard(
-    icon: @Composable () -> Unit,
-    titulo: String,
-    subtitulo: String,
-    seleccionado: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = if (seleccionado) PeachPale else Color.White,
-        border = BorderStroke(1.5.dp, if (seleccionado) CoralPrimary else OutlineSoft),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            icon()
-            Column(Modifier.weight(1f)) {
-                Text(
-                    titulo,
-                    color = if (seleccionado) CoralPrimary else MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                )
-                Text(
-                    subtitulo,
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-    }
-}
-
-/**
- * Maqueta 07 — Lista de conversaciones (conversaciones) con búsqueda.
- */
-@Composable
+// lista de conversaciones aceptadas con sus datos principales
 fun PantallaListaConversaciones(
     miUid: String,
     onOpenThread: (String) -> Unit,
@@ -2422,9 +2302,7 @@ private fun FilaListaConversaciones(
         }
         Spacer(Modifier.size(14.dp))
         Column(Modifier.weight(1f)) {
-            // Línea principal: nombre del perro; si aún no está cargado, el
-            // del dueño. Si tampoco lo tenemos, un placeholder amable en vez
-            // del uid técnico.
+            // mostramos primero el perro, luego el dueno y nunca un uid feo
             val title = entry.nombrePerro.ifBlank {
                 entry.nombreDueno.ifBlank { "Amigo" }
             }
@@ -2467,7 +2345,7 @@ private fun AvatarConversacion(urlFoto: String?, nombreRespaldo: String) {
     }
 }
 
-/** Formateo ligero del timestamp del coincidencia (hh:mm si es hoy, dd/MM si es antes). */
+// hora si es de hoy, dia y mes si es anterior
 private fun formatRelative(ts: Long): String {
     if (ts <= 0) return ""
     val now = java.util.Calendar.getInstance()
@@ -2516,11 +2394,8 @@ private fun ListaConversacionesVacia() {
     }
 }
 
-/**
- * Maqueta 09 — Mapa de paseos en vivo. Muestra amigos paseando y permite iniciar paseo propio.
- * Gestiona por sí misma la solicitud de permisos y el estado de carga con timeout.
- */
 @Composable
+// mapa para ver amigos paseando y marcar el propio paseo
 fun PantallaMapa(
     miUid: String,
     modifier: Modifier = Modifier,
@@ -2779,10 +2654,8 @@ private fun androidx.compose.foundation.layout.BoxScope.LocationUnavailableCTA(
     }
 }
 
-/**
- * Maqueta 10 — Perfil del usuario con cabecera en gradiente, estadísticas, perro y toggles.
- */
 @Composable
+// perfil propio con datos del usuario, perro y estadisticas
 fun PantallaPerfil(
     miUid: String,
     onOpenSettings: () -> Unit,
@@ -2829,7 +2702,7 @@ fun PantallaPerfil(
         Column(Modifier.padding(horizontal = 20.dp)) {
             Spacer(Modifier.height(56.dp))
             FilaEstadisticas(
-                amigos = estado.usuario?.numeroAmigos ?: 0,
+                amigos = estado.numeroAmigos,
                 paseos = estado.usuario?.numeroPaseos ?: 0,
                 coincidencias = estado.usuario?.numeroCoincidencias ?: 0,
             )
@@ -2959,7 +2832,7 @@ private fun ProfileHeader(
                 )
             }
         }
-        // Avatar overlay (tap para cambiar foto).
+        // avatar encima de la cabecera para cambiar foto
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -3218,19 +3091,8 @@ private fun EditingForm(
     }
 }
 
-/**
- * Registro → redirige al PantallaInicioSesion (la maqueta 02 unifica login + registro con tabs).
- * Se mantiene la ruta "registro" por compatibilidad con navegación existente.
- */
 @Composable
-fun PantallaRegistro(
-    onBack: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    PantallaInicioSesion(onGoRegister = onBack, modifier = modifier)
-}
-
-@Composable
+// formulario simple para enviar una incidencia a moderacion
 fun PantallaReporte(
     miUid: String,
     onBack: () -> Unit,
@@ -3278,12 +3140,8 @@ fun PantallaReporte(
     }
 }
 
-/**
- * Pantalla de celebración de coincidencia (maqueta 06).
- * Carga el dueño y el perro vía [ModeloVistaResultadoCoincidencia] y compone el botón
- * principal con el nombre del perro ("Enviar mensaje a <Perro>").
- */
 @Composable
+// celebracion cuando dos usuarios se gustan mutuamente
 fun PantallaResultadoCoincidencia(
     otroUid: String,
     onSendMessage: () -> Unit,
@@ -3381,10 +3239,8 @@ private fun AvatarCoincidencia(urlFoto: String?, fallbackAlpha: Float) {
     }
 }
 
-/**
- * Maqueta 03 — Onboarding del perfil humano.
- */
 @Composable
+// primer paso del onboarding: datos de la persona
 fun OnboardingHumanScreen(
     onNext: () -> Unit,
     viewModel: ModeloVistaConfiguracionPerfil,
@@ -3394,7 +3250,7 @@ fun OnboardingHumanScreen(
 ) {
     val s by viewModel.estado.collectAsStateWithLifecycle()
 
-    // PhotoPicker nativo (Android 13+) con fallback automático a intent clásico.
+    // selector de foto del sistema
     val pickPhoto = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri -> viewModel.establecerFotoHumano(uri) }
@@ -3467,10 +3323,8 @@ fun OnboardingHumanScreen(
     }
 }
 
-/**
- * Maqueta 04 — Onboarding del perfil del perro (chips de energía y sociabilidad).
- */
 @Composable
+// segundo paso del onboarding: datos del perro
 fun OnboardingDogScreen(
     miUid: String,
     onFinish: () -> Unit,
@@ -3605,7 +3459,7 @@ private fun ChipsSociabilidad(actual: Sociabilidad, onSelect: (Sociabilidad) -> 
     }
 }
 
-/** FlowRow estable de Compose (evita depender de accompanist). */
+// coloca chips en varias lineas sin usar otra libreria
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun FlowRowCompat(contenido: @Composable () -> Unit) {

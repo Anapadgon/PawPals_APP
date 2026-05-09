@@ -1,9 +1,6 @@
 package com.pawpals.app
 
-/**
- * Traduce errores de Auth/PostgREST/Red de Supabase (y respuestas verbosas del SDK)
- * a textos breves para la UI, sin URLs, cabeceras ni claves.
- */
+// convierte errores tecnicos de supabase en mensajes cortos para la pantalla
 fun mensajeErrorSupabaseHumano(
     causa: Throwable?,
     predeterminado: String = "Algo salió mal. Inténtalo de nuevo en un momento.",

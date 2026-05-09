@@ -1,7 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFF3EA</color>
-    <color name="paw_coral">#F4724A</color>
-    <color name="paw_peach">#F89B6E</color>
-    <color name="paw_peach_light">#FBBC96</color>
 </resources>

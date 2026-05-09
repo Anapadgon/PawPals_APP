@@ -1,5 +1,2 @@
-# PawPals — reglas mínimas; amplía si activas minify en release.
+# reglas minimas, ahora mismo release no usa minify
 -keepattributes Signature
--keepclassmembers class * {
-    @com.google.gson.annotations.SerializedName <fields>;
-}

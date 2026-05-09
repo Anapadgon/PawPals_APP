@@ -1,6 +1,5 @@
--- Ejecutar en Supabase → SQL (tras [pawpals_esquema_completo.sql]).
--- Permite a la app llamar a postgrest.rpc("eliminar_cuenta_auth") tras reautenticar:
--- borra filas públicas ligadas al uid y el registro en auth.users.
+-- se ejecuta despues del esquema principal
+-- borra la cuenta del usuario y sus datos relacionados
 
 create or replace function public.eliminar_cuenta_auth()
 returns void
@@ -48,4 +47,4 @@ revoke all on function public.eliminar_cuenta_auth() from public;
 grant execute on function public.eliminar_cuenta_auth() to authenticated;
 
 comment on function public.eliminar_cuenta_auth() is
-  'Auto-borrado de cuenta: datos públicos + auth.users (SECURITY DEFINER).';
+  'borra los datos del usuario y su cuenta de auth';

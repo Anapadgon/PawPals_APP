@@ -22,7 +22,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Distancia en km (Haversine). */
+// calcula distancia real entre dos coordenadas, no una resta simple
 object UtilidadesGeograficas {
     fun distanciaKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val earthKm = 6371.0
@@ -40,6 +40,7 @@ object UtilidadesGeograficas {
 private fun Location.toPair(): Pair<Double, Double> = latitude to longitude
 
 @Singleton
+// concentra los permisos y llamadas a gps para no repetirlos en pantallas
 class ControladorUbicacion @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
@@ -71,6 +72,7 @@ class ControladorUbicacion @Inject constructor(
         if (!isLocationEnabled()) {
             return Result.failure(IllegalStateException("Activa la ubicación del sistema"))
         }
+        // primero se intenta la ultima ubicacion; si no hay, se pide una nueva
         lastLocationSafe()?.let { return Result.success(it) }
         val fresh = withTimeoutOrNull(8_000) { currentLocationSafe() }
         return fresh?.let { Result.success(it) }

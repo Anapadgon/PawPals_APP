@@ -1,52 +1,33 @@
--- =============================================================================
--- PawPals — Esquema Postgres + RLS + Storage para Supabase
--- =============================================================================
--- Ejecuta TODO este archivo en: Supabase Dashboard → SQL Editor → New query.
---
--- No incluyas aquí URL ni claves API (anon/service_role). Configúralas solo en
--- la app (BuildConfig / local.properties / secrets de CI).
---
--- ⚠️ IMPORTANTE — Correo / registro / «demasiados correos» (rate limit):
---    Este archivo SQL NO configura Supabase Auth. No desactiva la verificación
---    de correo ni los límites de envío. Eso solo se cambia en el PANEL:
---    Authentication → Sign In / Providers → Email → desactivar confirmaciones.
---    Si sigues viendo errores de rate limit, espera unos minutos o revisa
---    Authentication → Rate Limits en el dashboard.
---
--- Convenciones:
---   - Columnas en snake_case; mapeo desde la app Kotlin/Firestore indicado en
---     comentarios (-- app: nombreCampo).
---   - IDs de usuario como TEXT para igualar auth.uid()::text y UIDs demo.
--- =============================================================================
+-- script principal para montar la base de datos de pawpals en supabase
+-- se pega entero en el editor sql de supabase y se ejecuta una vez
+-- las claves y urls no van aqui, se guardan en local.properties
+-- lo del correo de confirmacion se cambia desde el panel de auth, no con sql
 
--- Opcional: pgcrypto ya suele estar en Supabase para gen_random_uuid().
+-- pgcrypto se usa para crear uuid cuando hace falta
 create extension if not exists "pgcrypto";
 
--- Nota: las funciones que consultan tablas van DESPUÉS de crear las tablas
--- (PostgreSQL valida que existan al crear la función).
+-- primero van las tablas y despues las funciones que las consultan
 
--- -----------------------------------------------------------------------------
--- Tablas
--- -----------------------------------------------------------------------------
+-- tablas de la app
 
 create table if not exists public.usuarios (
-  id text primary key, -- auth.uid()::text o IDs demo
+  id text primary key, -- auth.uid()::text o id de prueba
   correo text not null default '',
-  nombre_visible text not null default '', -- app: nombreVisible
+  nombre_visible text not null default '',
   zona text not null default '',
-  sobre_mi text not null default '', -- app: sobreMi
+  sobre_mi text not null default '',
   rol text not null default 'usuario', -- 'usuario' | 'administrador' | 'administradoristrador'
   bloqueado boolean not null default false,
   latitud double precision,
   longitud double precision,
-  ubicacion_actualizada_en bigint, -- app: ubicacionActualizadaEn (epoch ms)
-  token_fcm text, -- app: tokenFcm
-  url_foto text, -- app: urlFoto
-  numero_amigos integer not null default 0, -- app: numeroAmigos
-  numero_paseos integer not null default 0, -- app: numeroPaseos
-  numero_coincidencias integer not null default 0, -- app: numeroCoincidencias
+  ubicacion_actualizada_en bigint,
+  token_fcm text,
+  url_foto text,
+  numero_amigos integer not null default 0,
+  numero_paseos integer not null default 0,
+  numero_coincidencias integer not null default 0,
   paseando boolean not null default false,
-  creado_en bigint, -- app: creadoEn (epoch ms)
+  creado_en bigint,
   es_demo boolean not null default false -- app: demo
 );
 
@@ -54,15 +35,15 @@ create index if not exists idx_usuarios_es_demo on public.usuarios (es_demo) whe
 
 create table if not exists public.perros (
   id text primary key,
-  uid_dueno text not null references public.usuarios (id) on delete cascade, -- app: uidDueno
+  uid_dueno text not null references public.usuarios (id) on delete cascade,
   nombre text not null default '',
   raza text not null default '',
-  edad_anios integer not null default 1, -- app: edadAnios
+  edad_anios integer not null default 1,
   biografia text not null default '',
-  url_foto text, -- app: urlFoto
-  energia text not null default 'moderado', -- app: energia (enum en minúsculas)
+  url_foto text,
+  energia text not null default 'moderado', -- app: energia
   sociabilidad text not null default 'muy_sociable', -- app: sociabilidad
-  actualizado_en bigint, -- app: actualizadoEn
+  actualizado_en bigint,
   es_demo boolean not null default false -- app: demo
 );
 
@@ -70,21 +51,21 @@ create index if not exists idx_perros_uid_dueno on public.perros (uid_dueno);
 
 create table if not exists public.coincidencias (
   id text primary key,
-  usuario_a text not null, -- app: usuarioA (orden menor)
-  usuario_b text not null, -- app: usuarioB (orden mayor)
-  usuario_menor text not null, -- app: usuarioMenor
-  usuario_mayor text not null, -- app: usuarioMayor
+  usuario_a text not null,
+  usuario_b text not null,
+  usuario_menor text not null,
+  usuario_mayor text not null,
   participantes text[] not null, -- exactamente dos ids
-  iniciador text not null, -- app: iniciador (uid que originó la coincidencia)
+  iniciador text not null,
   estado text not null default 'pendiente', -- pendiente | aceptada | rechazada
-  creado_en bigint not null default (floor(extract(epoch from now()) * 1000))::bigint -- app: creadoEn
+  creado_en bigint not null default (floor(extract(epoch from now()) * 1000))::bigint
 );
 
 create index if not exists idx_coincidencias_participantes on public.coincidencias using gin (participantes);
 create index if not exists idx_coincidencias_menor_mayor on public.coincidencias (usuario_menor, usuario_mayor);
 
 create table if not exists public.deslizamientos (
-  id text primary key, -- app: "<uidOrigen>__<uidDestino>"
+  id text primary key,
   uid_origen text not null,
   uid_destino text not null,
   accion text not null, -- me_gusta | super_me_gusta | descartar
@@ -94,7 +75,7 @@ create table if not exists public.deslizamientos (
 create index if not exists idx_desliz_origen on public.deslizamientos (uid_origen);
 
 create table if not exists public.solicitudes_amistad (
-  id text primary key, -- app: "<uidOrigen>__<uidDestino>"
+  id text primary key,
   uid_origen text not null,
   uid_destino text not null,
   estado text not null default 'pendiente', -- pendiente | aceptada | rechazada
@@ -103,11 +84,11 @@ create table if not exists public.solicitudes_amistad (
 
 create index if not exists idx_solicitudes_destino on public.solicitudes_amistad (uid_destino, estado);
 
--- Sustituye la subcolección usuarios/{uid}/amigos/{otroUid}
+-- una fila por cada amistad guardada en los dos sentidos
 create table if not exists public.amigos (
   usuario_id text not null references public.usuarios (id) on delete cascade,
   amigo_id text not null references public.usuarios (id) on delete cascade,
-  creado_en bigint not null default (floor(extract(epoch from now()) * 1000))::bigint, -- app: creadoEn
+  creado_en bigint not null default (floor(extract(epoch from now()) * 1000))::bigint,
   primary key (usuario_id, amigo_id)
 );
 
@@ -122,31 +103,31 @@ create table if not exists public.tickets_soporte (
   creado_en bigint not null default (floor(extract(epoch from now()) * 1000))::bigint
 );
 
--- Metadatos del hilo (mensajes en tabla aparte, igual que subcolección Firestore)
+-- datos generales del chat; los mensajes van en otra tabla
 create table if not exists public.conversaciones (
-  id text primary key, -- app: "<uidBajo>__<uidAlto>"
+  id text primary key,
   participantes text[] not null,
   creado_en bigint,
   ultimo_mensaje text,
-  ultimo_mensaje_en bigint, -- app: ultimoMensajeEn
-  ultimo_remitente text -- app: ultimoRemitente
+  ultimo_mensaje_en bigint,
+  ultimo_remitente text
 );
 
 create table if not exists public.mensajes (
   id uuid primary key default gen_random_uuid(),
   conversacion_id text not null references public.conversaciones (id) on delete cascade,
-  uid_remitente text not null, -- app: uidRemitente
+  uid_remitente text not null,
   texto text not null default '',
-  marca_temporal bigint not null default (floor(extract(epoch from now()) * 1000))::bigint -- app: marcaTemporal
+  marca_temporal bigint not null default (floor(extract(epoch from now()) * 1000))::bigint
 );
 
 create index if not exists idx_mensajes_conversacion_tiempo on public.mensajes (conversacion_id, marca_temporal);
 
 create table if not exists public.reportes (
   id uuid primary key default gen_random_uuid(),
-  tipo_objetivo text not null, -- usuario | mensaje | perro  (app: tipoObjetivo)
-  id_objetivo text not null, -- app: idObjetivo
-  uid_reportante text not null, -- app: uidReportante
+  tipo_objetivo text not null,
+  id_objetivo text not null,
+  uid_reportante text not null,
   motivo text not null,
   estado text not null default 'abierto', -- abierto | revisado | accion_tomada
   creado_en bigint not null default (floor(extract(epoch from now()) * 1000))::bigint
@@ -154,9 +135,7 @@ create table if not exists public.reportes (
 
 create index if not exists idx_reportes_creado on public.reportes (creado_en desc);
 
--- -----------------------------------------------------------------------------
--- Funciones auxiliares (después de tablas; usadas en políticas RLS)
--- -----------------------------------------------------------------------------
+-- funciones pequenas para no repetir las mismas comprobaciones en cada regla
 
 create or replace function public.pawpals_usuario_autenticado()
 returns boolean
@@ -174,7 +153,7 @@ as $$
   select auth.uid() is not null and (auth.uid())::text = uid;
 $$;
 
--- Compatibilidad: la app escribe "administrador"; las reglas antiguas usaban typo.
+-- acepto tambien el texto antiguo por si quedo algun dato viejo
 create or replace function public.pawpals_es_administrador()
 returns boolean
 language sql
@@ -190,7 +169,7 @@ as $$
   );
 $$;
 
--- Para políticas de mensajes: el usuario pertenece al hilo de conversación.
+-- comprueba que el usuario esta dentro de esa conversacion
 create or replace function public.pawpals_participa_conversacion(p_conversacion_id text)
 returns boolean
 language sql
@@ -204,11 +183,9 @@ as $$
   );
 $$;
 
-comment on function public.pawpals_es_administrador() is 'True si usuarios.rol es administrador (incluye typo legado).';
+comment on function public.pawpals_es_administrador() is 'devuelve true si el usuario es administrador';
 
--- -----------------------------------------------------------------------------
--- Row Level Security
--- -----------------------------------------------------------------------------
+-- permisos de lectura y escritura
 
 alter table public.usuarios enable row level security;
 alter table public.perros enable row level security;
@@ -221,7 +198,7 @@ alter table public.conversaciones enable row level security;
 alter table public.mensajes enable row level security;
 alter table public.reportes enable row level security;
 
--- --- usuarios ---
+-- usuarios
 drop policy if exists usuarios_select_autenticado on public.usuarios;
 create policy usuarios_select_autenticado
   on public.usuarios for select
@@ -249,7 +226,7 @@ create policy usuarios_delete_propio_o_admin
   to authenticated
   using (public.pawpals_mismo_usuario(id) or public.pawpals_es_administrador());
 
--- --- perros ---
+-- perros
 drop policy if exists perros_select_autenticado on public.perros;
 create policy perros_select_autenticado
   on public.perros for select
@@ -277,7 +254,7 @@ create policy perros_delete_dueno_o_admin
   to authenticated
   using ((auth.uid())::text = uid_dueno or public.pawpals_es_administrador());
 
--- --- coincidencias ---
+-- coincidencias
 drop policy if exists coincidencias_select_autenticado on public.coincidencias;
 create policy coincidencias_select_autenticado
   on public.coincidencias for select
@@ -308,7 +285,7 @@ create policy coincidencias_delete_participante_o_admin
     or (auth.uid())::text = any (participantes)
   );
 
--- --- deslizamientos ---
+-- deslizamientos
 drop policy if exists desliz_select_autenticado on public.deslizamientos;
 create policy desliz_select_autenticado
   on public.deslizamientos for select
@@ -338,7 +315,7 @@ create policy desliz_delete_condiciones
     or (auth.uid())::text = uid_destino
   );
 
--- --- solicitudes_amistad ---
+-- solicitudes de amistad
 drop policy if exists sol_select_autenticado on public.solicitudes_amistad;
 create policy sol_select_autenticado
   on public.solicitudes_amistad for select
@@ -370,7 +347,7 @@ create policy sol_delete_admin
   to authenticated
   using (public.pawpals_es_administrador());
 
--- --- amigos ---
+-- amigos
 drop policy if exists amigos_select_autenticado on public.amigos;
 create policy amigos_select_autenticado
   on public.amigos for select
@@ -403,7 +380,7 @@ create policy amigos_update_admin
   using (public.pawpals_es_administrador())
   with check (public.pawpals_es_administrador());
 
--- --- tickets_soporte ---
+-- mensajes de soporte
 drop policy if exists tickets_select_admin on public.tickets_soporte;
 create policy tickets_select_admin
   on public.tickets_soporte for select
@@ -429,7 +406,7 @@ create policy tickets_delete_admin
   to authenticated
   using (public.pawpals_es_administrador());
 
--- --- conversaciones ---
+-- conversaciones
 drop policy if exists conv_select_autenticado on public.conversaciones;
 create policy conv_select_autenticado
   on public.conversaciones for select
@@ -449,7 +426,7 @@ create policy conv_update_participante
   using ((auth.uid())::text = any (participantes))
   with check ((auth.uid())::text = any (participantes));
 
--- --- mensajes ---
+-- mensajes
 drop policy if exists msg_select_participante on public.mensajes;
 create policy msg_select_participante
   on public.mensajes for select
@@ -478,7 +455,7 @@ create policy msg_delete_admin
   to authenticated
   using (public.pawpals_es_administrador());
 
--- --- reportes ---
+-- reportes
 drop policy if exists rep_select_admin on public.reportes;
 create policy rep_select_admin
   on public.reportes for select
@@ -504,22 +481,20 @@ create policy rep_delete_admin
   to authenticated
   using (public.pawpals_es_administrador());
 
--- -----------------------------------------------------------------------------
--- Storage (fotos: usuarios/{uid}/perfil.jpg y perros/{uidDueno}/perro.jpg)
--- -----------------------------------------------------------------------------
+-- bucket para las fotos de usuario y perro
 
 insert into storage.buckets (id, name, public)
 values ('medios', 'medios', true)
 on conflict (id) do nothing;
 
--- Lectura pública de objetos en bucket medios (equivalente a URLs públicas de Firebase).
+-- las fotos se pueden leer para mostrarlas en la app
 drop policy if exists medios_read_public on storage.objects;
 create policy medios_read_public
   on storage.objects for select
   to public
   using (bucket_id = 'medios');
 
--- Subida: solo rutas usuarios/{mi_uid}/… o perros/{mi_uid}/…
+-- cada usuario solo puede subir en su propia carpeta
 drop policy if exists medios_insert_authenticated_own on storage.objects;
 create policy medios_insert_authenticated_own
   on storage.objects for insert
@@ -571,32 +546,6 @@ create policy medios_delete_authenticated_own
     )
   );
 
--- -----------------------------------------------------------------------------
--- Realtime (chat): opcional; quita el comentario si usas suscripciones Realtime.
--- -----------------------------------------------------------------------------
+-- si se activa realtime para el chat, estas lineas se pueden descomentar
 -- alter publication supabase_realtime add table public.mensajes;
 -- alter publication supabase_realtime add table public.conversaciones;
-
--- =============================================================================
--- Post-instalación manual recomendada
--- =============================================================================
--- 1) Crea un usuario admin en Authentication y luego inserta/actualiza su fila
---    en public.usuarios con rol = 'administrador' (mismo id que auth.uid()).
--- 2) Si el primer arranque de la app hace "upsert" de perfil tras login,
---    asegúrate de insertar la fila en `usuarios` con id = auth.uid()::text.
--- 3) Rotación: la clave "publishable" que compartiste en chat debería tratarse
---    como sensible; si se filtró, genera otra en el panel de Supabase.
--- 4) Ejecuta también `pawpals_rpc_eliminar_cuenta.sql` para el borrado de cuenta
---    desde la app (RPC `eliminar_cuenta_auth`).
--- 5) Ejecuta `pawpals_rpc_asegurar_usuario.sql` para crear la fila inicial en `usuarios`
---    al registrar / onboarding (RPC `pawpals_asegurar_mi_usuario`).
--- 6) Ejecuta `pawpals_rpc_onboarding_perfil.sql` para guardar perfil humano + perro en onboarding
---    (`pawpals_actualizar_mi_perfil`, `pawpals_guardar_mi_perro`).
--- 7) PawPals (demo): evitar correo de confirmación y rate limits al registrar:
---    Esto NO se hace con SQL. En el MISMO proyecto → menú lateral:
---    Authentication → (a veces «Sign In / Providers» o pestaña Providers) → Email.
---    Desactiva «Confirm email» / «Enable email confirmations» (deja registro con
---    sesión inmediata y casi sin correos).
---    Si aún ves «demasiados correos»: espera 5–15 min, o Authentication → Rate Limits
---    (ajústalos en desarrollo), o prueba otro correo / red.
--- =============================================================================

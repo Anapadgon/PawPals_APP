@@ -1,9 +1,7 @@
--- Ejecutar en Supabase → SQL (tras pawpals_esquema_completo.sql y pawpals_rpc_asegurar_usuario.sql).
--- Evita fallos de RLS/upsert al completar el onboarding: perfil humano + perro del usuario actual.
+-- se ejecuta despues del esquema y del script de asegurar usuario
+-- guarda los datos del onboarding sin pelearse con las reglas de seguridad
 
--- -----------------------------------------------------------------------------
--- Actualizar fila en public.usuarios para auth.uid()
--- -----------------------------------------------------------------------------
+-- actualiza los datos de la persona
 create or replace function public.pawpals_actualizar_mi_perfil(
   p_nombre_visible text,
   p_zona text,
@@ -41,11 +39,9 @@ revoke all on function public.pawpals_actualizar_mi_perfil(text, text, text, tex
 grant execute on function public.pawpals_actualizar_mi_perfil(text, text, text, text) to authenticated;
 
 comment on function public.pawpals_actualizar_mi_perfil(text, text, text, text) is
-  'Actualiza nombre, zona, bio y opcionalmente foto (SECURITY DEFINER).';
+  'actualiza nombre, zona, descripcion y foto del usuario';
 
--- -----------------------------------------------------------------------------
--- Insertar o actualizar el perro del usuario actual (un perro por uid dueño en la app)
--- -----------------------------------------------------------------------------
+-- crea o actualiza el perro del usuario
 create or replace function public.pawpals_guardar_mi_perro(
   p_nombre text,
   p_raza text,
@@ -123,4 +119,4 @@ revoke all on function public.pawpals_guardar_mi_perro(text, text, int, text, te
 grant execute on function public.pawpals_guardar_mi_perro(text, text, int, text, text, text, text) to authenticated;
 
 comment on function public.pawpals_guardar_mi_perro(text, text, int, text, text, text, text) is
-  'Crea o actualiza el perro del usuario actual (SECURITY DEFINER); devuelve id del perro.';
+  'crea o actualiza el perro del usuario y devuelve su id';

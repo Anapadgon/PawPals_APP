@@ -7,9 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import dagger.hilt.android.AndroidEntryPoint
 
-/**
- * Actividad única: hospeda el [AnfitrionNavegacionRaiz] en Compose y el tema PawPals.
- */
+// punto de entrada visual: monta compose, tema y navegacion principal
 @AndroidEntryPoint
 class ActividadPrincipal : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

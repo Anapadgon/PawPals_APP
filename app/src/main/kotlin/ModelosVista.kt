@@ -9,12 +9,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -28,6 +26,7 @@ data class EstadoUiAdministracion(
 )
 
 @HiltViewModel
+// estado y acciones del panel de administracion
 class ModeloVistaAdministracion @Inject constructor(
     private val repositorioUsuario: RepositorioUsuario,
     private val repositorioEstadisticasAdministracion: RepositorioEstadisticasAdministracion,
@@ -97,10 +96,7 @@ class ModeloVistaAdministracion @Inject constructor(
         }
     }
 
-    /**
-     * Crea ~8 perfiles de demostración con sus perros. Si el administrador tiene
-     * ubicación guardada, los coloca cerca; si no, en el centro de Madrid.
-     */
+    // crea unos perfiles de prueba cerca del admin, o en madrid si no hay ubicacion
     fun sembrarPerfilesDemo() {
         viewModelScope.launch {
             _estado.update { it.copy(sembrando = true, mensaje = null) }
@@ -125,7 +121,7 @@ class ModeloVistaAdministracion @Inject constructor(
         }
     }
 
-    /** Elimina todos los perfiles sintéticos previamente creados. */
+    // borra los perfiles de prueba que se habian creado
     fun limpiarPerfilesDemo() {
         viewModelScope.launch {
             _estado.update { it.copy(sembrando = true, mensaje = null) }
@@ -163,6 +159,7 @@ data class EstadoUiAjustes(
 )
 
 @HiltViewModel
+// mantiene sincronizados los ajustes locales con datastore
 class ModeloVistaAjustes @Inject constructor(
     private val preferenciasUsuario: PreferenciasUsuario,
     private val repositorioAutenticacion: RepositorioAutenticacion,
@@ -261,10 +258,7 @@ class ModeloVistaAjustes @Inject constructor(
         }
     }
 
-    /**
-     * Elimina la cuenta vía Supabase: la RPC `eliminar_cuenta_auth` borra datos públicos
-     * y el usuario en `auth.users` (requiere reautenticación con contraseña).
-     */
+    // borra la cuenta despues de volver a comprobar la contrasena
     fun eliminarCuenta(contrasena: String) {
         viewModelScope.launch {
             _estado.update { it.copy(ocupado = true, info = null, error = null) }
@@ -288,10 +282,7 @@ class ModeloVistaAjustes @Inject constructor(
     }
 }
 
-/**
- * Gestiona el envío de un ticket de soporte desde la pantalla de usuario baneado.
- * MVVM: la vista se suscribe a [estado] y delega la lógica aquí.
- */
+// estado del mensaje que manda un usuario bloqueado a soporte
 data class EstadoUiBloqueado(
     val mensaje: String = "",
     val enviando: Boolean = false,
@@ -343,21 +334,15 @@ class ModeloVistaBloqueado @Inject constructor(
     fun reiniciarEnviado() = _estado.update { it.copy(enviado = false) }
 }
 
-/**
- * Estado del bienvenida multi-paso (perfil humano + perfil perro).
- * Se corresponde con las maquetas 03 y 04 del diseño.
- *
- * Las fotos se almacenan primero como [Uri] local (selección por picker) y sólo
- * se suben a Supabase Storage al pulsar "Siguiente" del paso final.
- */
+// datos que se van rellenando en el onboarding de persona y perro
 data class EstadoUiConfiguracionPerfil(
     val paso: Int = 0,
-    // Humano (03)
+    // datos de la persona
     val nombreHumano: String = "",
     val zona: String = "",
     val sobreMi: String = "",
     val uriFotoHumano: Uri? = null,
-    // Perro (04)
+    // datos del perro
     val nombrePerro: String = "",
     val razaPerro: String = "",
     val edadPerro: String = "",
@@ -371,6 +356,7 @@ data class EstadoUiConfiguracionPerfil(
 )
 
 @HiltViewModel
+// recoge los datos del primer perfil antes de entrar a explorar
 class ModeloVistaConfiguracionPerfil @Inject constructor(
     private val repositorioUsuario: RepositorioUsuario,
     private val repositorioPerro: RepositorioPerro,
@@ -408,18 +394,13 @@ class ModeloVistaConfiguracionPerfil @Inject constructor(
         return s.nombrePerro.trim().length >= 2 && s.razaPerro.isNotBlank()
     }
 
-    /**
-     * Persiste perfil humano + perro:
-     *   1. Sube las fotos seleccionadas (si las hay) a Supabase Storage.
-     *   2. Llama a los repos de datos con las URLs resultantes.
-     *   3. Marca bienvenida como terminado para que el ModeloVistaRaiz navegue.
-     */
+    // guarda el perfil completo y sube las fotos si el usuario eligio alguna
     fun finalizarOnboarding(uid: String) {
         viewModelScope.launch {
             val s = _estado.value
             _estado.update { it.copy(guardando = true, error = null) }
 
-            // Sin fila en `usuarios`, `actualizarPerfil` no inserta y `guardarPerro` rompe la FK.
+            // primero debe existir la fila de usuario, si no el perro falla por la relacion
             val correo = repositorioAutenticacion.cuentaActual()?.correo.orEmpty()
             repositorioUsuario.asegurarDocumentoUsuario(uid, correo).onFailure { e ->
                 _estado.update {
@@ -473,23 +454,24 @@ data class EstadoUiConversacion(
     val enviando: Boolean = false,
     val error: String? = null,
     val info: String? = null,
-    /** Solicitud pendiente entre los dos usuarios (o null si ya son amigos / no hay). */
+    // solicitud pendiente, si todavia no son amigos
     val solicitudPendiente: SolicitudAmistad? = null,
-    /** Indica si ya son amigos (oculta la acción «Añadir como amigo»). */
+    // sirve para ocultar el boton de anadir amigo
     val yaSonAmigos: Boolean = false,
-    /** Tras deshacer el coincidencia se notifica a la UI para que navegue atrás. */
+    // cuando se rompe la coincidencia, la pantalla vuelve atras
     val coincidenciaDeshecha: Boolean = false,
-    /** Datos cargados del otro interlocutor para el header. */
+    // datos rapidos para la cabecera del chat
     val nombreVisibleOtro: String = "",
     val nombrePerroOtro: String = "",
     val urlFotoPerroOtro: String? = null,
     val urlFotoUsuarioOtro: String? = null,
-    /** Perfiles completos — se muestran al pulsar la cabecera del conversación. */
+    // perfiles completos para abrir la ficha desde la cabecera
     val perfilUsuarioOtro: PerfilUsuario? = null,
     val perfilPerroOtro: PerfilPerro? = null,
 )
 
 @HiltViewModel
+// controla mensajes, amistad y datos del otro usuario dentro del chat
 class ModeloVistaConversacion @Inject constructor(
     private val repositorioConversacion: RepositorioConversacion,
     private val repositorioAmistad: RepositorioAmistad,
@@ -502,7 +484,7 @@ class ModeloVistaConversacion @Inject constructor(
 
     private val otroUid: String = checkNotNull(savedStateHandle["otroUid"])
 
-    /** Expuesto para la UI: nombre temporal mientras no cargamos el perfil. */
+    // valor provisional mientras llegan los datos reales
     val otroUidVistaPrevia: String = otroUid
 
     private val _estado = MutableStateFlow(EstadoUiConversacion())
@@ -510,10 +492,7 @@ class ModeloVistaConversacion @Inject constructor(
 
     private var observando = false
 
-    /**
-     * Arranca la escucha de mensajes, solicitudes de amistad y estado de amistad
-     * entre [miUid] y [otroUid]. Llamada desde [LaunchedEffect].
-     */
+    // empieza a escuchar mensajes, amistad y datos del otro usuario
     fun observar(miUid: String) {
         if (observando) return
         observando = true
@@ -574,7 +553,7 @@ class ModeloVistaConversacion @Inject constructor(
         }
     }
 
-    /** Envía una solicitud de amistad al otro usuario. */
+    // manda una solicitud de amistad al otro usuario
     fun solicitarAmistad(miUid: String) {
         viewModelScope.launch {
             val r = repositorioAmistad.enviarSolicitudAmistad(miUid, otroUid)
@@ -618,11 +597,21 @@ class ModeloVistaConversacion @Inject constructor(
         }
     }
 
-    /**
-     * Deshace el coincidencia: borra el documento en `coincidencias`, los deslizamientos recíprocos
-     * (para que ambos puedan volver a encontrarse si quieren) y notifica a la
-     * UI para que vuelva atrás.
-     */
+    fun eliminarAmigo(miUid: String) {
+        viewModelScope.launch {
+            val r = repositorioAmistad.eliminarAmigo(miUid, otroUid)
+            _estado.update {
+                it.copy(
+                    info = if (r.isSuccess) "Amigo eliminado" else null,
+                    error = r.exceptionOrNull()?.let {
+                        mensajeErrorSupabaseHumano(it, "No se pudo eliminar de amigos.")
+                    },
+                )
+            }
+        }
+    }
+
+    // deshace la coincidencia y permite que ambos puedan volver a encontrarse
     fun deshacerCoincidencia(miUid: String) {
         viewModelScope.launch {
             val coincidencia = repositorioCoincidencia.buscarCoincidencia(miUid, otroUid).getOrNull()
@@ -637,9 +626,7 @@ class ModeloVistaConversacion @Inject constructor(
     fun limpiarInfo() = _estado.update { it.copy(info = null, error = null) }
 }
 
-/**
- * Tarjeta agregada para la pantalla Explorar: combina perfil humano + perro + distancia.
- */
+// tarjeta que junta dueno, perro y distancia para explorar
 data class TarjetaExplorar(
     val usuario: PerfilUsuario,
     val perro: PerfilPerro?,
@@ -651,9 +638,9 @@ data class EstadoUiExplorar(
     val tarjetas: List<TarjetaExplorar> = emptyList(),
     val indice: Int = 0,
     val error: String? = null,
-    /** Se rellena cuando hay un coincidencia mutuo real (ambos dieron me gusta). */
+    // se rellena cuando el me gusta ha sido mutuo
     val ultimoUidCoincidencia: String? = null,
-    /** Mensaje informativo ("Te gustó Luna. Te avisaremos si también le gustas."). */
+    // texto corto para avisos despues de deslizar
     val mensajeInfo: String? = null,
 ) {
     val actual: TarjetaExplorar? get() = tarjetas.getOrNull(indice)
@@ -661,6 +648,7 @@ data class EstadoUiExplorar(
 }
 
 @HiltViewModel
+// prepara las tarjetas de explorar y registra cada decision del usuario
 class ModeloVistaExplorar @Inject constructor(
     private val repositorioUsuario: RepositorioUsuario,
     private val repositorioPerro: RepositorioPerro,
@@ -671,15 +659,12 @@ class ModeloVistaExplorar @Inject constructor(
     private val _estado = MutableStateFlow(EstadoUiExplorar())
     val estado: StateFlow<EstadoUiExplorar> = _estado.asStateFlow()
 
-    /**
-     * Carga los perfiles candidatos filtrando a los que el usuario ya deslizó.
-     * Se ejecuta al entrar a la pestaña y tras cada acción para mantener el listado fresco.
-     */
+    // carga candidatos quitando los perfiles que ya se han deslizado
     fun cargar(miUid: String) {
         viewModelScope.launch {
             _estado.update { it.copy(cargando = true, error = null) }
 
-            // Ubicación actual para ordenar por cercanía y que otros nos vean.
+            // ubicacion actual para ordenar por cercania y actualizar nuestro perfil
             val loc = controladorUbicacion.ultimaUbicacionConocidaOFresca().getOrNull()
             val myLat = loc?.first
             val myLng = loc?.second
@@ -703,13 +688,13 @@ class ModeloVistaExplorar @Inject constructor(
         }
     }
 
-    /** Rechazo: registra disme gusta y pasa a la siguiente tarjeta. */
+    // descarta la tarjeta actual
     fun rechazar(miUid: String) = deslizar(miUid, AccionDeslizamiento.DESCARTAR)
 
-    /** Me gusta: registra me gusta, avanza y si es mutuo abre la pantalla de coincidencia. */
+    // da me gusta y si la otra persona tambien lo hizo, hay coincidencia
     fun meGusta(miUid: String) = deslizar(miUid, AccionDeslizamiento.ME_GUSTA)
 
-    /** Super-me gusta: marca preferencia alta y avanza. */
+    // marca un me gusta mas destacado
     fun superMeGusta(miUid: String) = deslizar(miUid, AccionDeslizamiento.SUPER_ME_GUSTA)
 
     private fun deslizar(miUid: String, accion: AccionDeslizamiento) {
@@ -743,11 +728,7 @@ class ModeloVistaExplorar @Inject constructor(
     fun limpiarInfo() = _estado.update { it.copy(mensajeInfo = null) }
 }
 
-/**
- * Tarjeta enriquecida para la lista de conversaciones. En lugar de mostrar uids
- * técnicos enseñamos el nombre real del dueño, el nombre del perro y,
- * cuando esté disponible, la foto del perro.
- */
+// fila de chat con nombres y fotos, no solo ids
 data class EntradaListaConversaciones(
     val coincidencia: Coincidencia,
     val otroUid: String,
@@ -762,6 +743,7 @@ data class EstadoUiListaConversaciones(
 )
 
 @HiltViewModel
+// monta la lista de chats con nombres y fotos en lugar de ids
 class ModeloVistaListaConversaciones @Inject constructor(
     private val repositorioCoincidencia: RepositorioCoincidencia,
     private val repositorioUsuario: RepositorioUsuario,
@@ -791,8 +773,7 @@ class ModeloVistaListaConversaciones @Inject constructor(
                 }
                 _estado.update { it.copy(entradasAceptadas = base) }
 
-                // Aseguramos una suscripción por cada uid, cancelando las que
-                // ya no están activas para evitar fugas.
+                // dejamos solo las escuchas que siguen haciendo falta
                 val activeUids = base.map { it.otroUid }.toSet()
                 tareasDetalle.keys.filter { it !in activeUids }.forEach { old ->
                     tareasDetalle.remove(old)?.cancel()
@@ -862,14 +843,8 @@ data class EstadoUiMapa(
     val snack: String? = null,
 )
 
-/**
- * ViewModel del mapa de paseos en vivo.
- *
- * Privacidad: ahora sólo se muestran los **amigos confirmados** (tienen una
- * entrada en `users/{miUid}/friends`) que además están paseando. Los coincidencias
- * sin amistad NO exponen su ubicación.
- */
 @HiltViewModel
+// controla el mapa de paseos y limita la ubicacion a amigos confirmados
 class ModeloVistaMapa @Inject constructor(
     private val controladorUbicacion: ControladorUbicacion,
     private val repositorioUsuario: RepositorioUsuario,
@@ -924,10 +899,7 @@ class ModeloVistaMapa @Inject constructor(
         }
     }
 
-    /**
-     * Inicia / finaliza un paseo y, cuando se finaliza un paseo activo,
-     * incrementa el contador público `numeroPaseos` del usuario.
-     */
+    // cambia entre paseando y no paseando, y suma el paseo al terminar
     fun alternarPaseo(miUid: String) {
         viewModelScope.launch {
             val estabaPaseando = _estado.value.yoPaseando
@@ -958,6 +930,7 @@ class ModeloVistaMapa @Inject constructor(
 data class EstadoUiPerfil(
     val usuario: PerfilUsuario? = null,
     val perro: PerfilPerro? = null,
+    val numeroAmigos: Int = 0,
     val nombreVisible: String = "",
     val zona: String = "",
     val sobreMi: String = "",
@@ -975,9 +948,11 @@ data class EstadoUiPerfil(
 )
 
 @HiltViewModel
+// escucha el perfil propio y permite editar humano, perro y fotos
 class ModeloVistaPerfil @Inject constructor(
     private val repositorioUsuario: RepositorioUsuario,
     private val repositorioPerro: RepositorioPerro,
+    private val repositorioAmistad: RepositorioAmistad,
     private val repositorioAutenticacion: RepositorioAutenticacion,
     private val repositorioAlmacenamiento: RepositorioAlmacenamiento,
     private val preferenciasUsuario: PreferenciasUsuario,
@@ -992,6 +967,7 @@ class ModeloVistaPerfil @Inject constructor(
                 _estado.update {
                     it.copy(
                         usuario = u,
+                        numeroAmigos = u?.numeroAmigos ?: it.numeroAmigos,
                         nombreVisible = u?.nombreVisible.orEmpty(),
                         zona = u?.zona.orEmpty(),
                         sobreMi = u?.sobreMi.orEmpty(),
@@ -1019,6 +995,11 @@ class ModeloVistaPerfil @Inject constructor(
         }
         viewModelScope.launch {
             preferenciasUsuario.notificarPaseos.collect { v -> _estado.update { it.copy(notificarPaseos = v) } }
+        }
+        viewModelScope.launch {
+            repositorioAmistad.observarUidsAmigos(uid).collect { amigos ->
+                _estado.update { it.copy(numeroAmigos = amigos.size) }
+            }
         }
     }
 
@@ -1083,7 +1064,7 @@ class ModeloVistaPerfil @Inject constructor(
         repositorioAutenticacion.cerrarSesion()
     }
 
-    /** Sube una foto de perfil del usuario y actualiza el perfil en Postgres con la URL resultante. */
+    // sube la foto del usuario y guarda la url nueva
     fun actualizarFotoUsuario(uid: String, uri: Uri) {
         viewModelScope.launch {
             _estado.update { it.copy(guardandoPerfil = true) }
@@ -1108,7 +1089,7 @@ class ModeloVistaPerfil @Inject constructor(
         }
     }
 
-    /** Sube la foto del perro asociada al owner actual. */
+    // sube la foto del perro y actualiza su ficha
     fun actualizarFotoPerro(uid: String, uri: Uri) {
         viewModelScope.launch {
             _estado.update { it.copy(guardandoPerfil = true) }
@@ -1139,14 +1120,11 @@ class ModeloVistaPerfil @Inject constructor(
     fun limpiarMensaje() = _estado.update { it.copy(mensaje = null) }
 }
 
-/**
- * Estado global de sesión + bienvenida (DataStore): raíz del grafo de navegación.
- */
 @HiltViewModel
+// punto central que decide si se ve login, onboarding, app, admin o bloqueo
 class ModeloVistaRaiz @Inject constructor(
     private val repositorioAutenticacion: RepositorioAutenticacion,
     private val repositorioUsuario: RepositorioUsuario,
-    private val preferenciasUsuario: PreferenciasUsuario,
 ) : ViewModel() {
 
     fun cerrarSesion() {
@@ -1154,9 +1132,6 @@ class ModeloVistaRaiz @Inject constructor(
             repositorioAutenticacion.cerrarSesion()
         }
     }
-
-    val bienvenidaCompletada: StateFlow<Boolean> = preferenciasUsuario.bienvenidaCompletada
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _estadoSesion = MutableStateFlow<EstadoUiSesion>(EstadoUiSesion.Cargando)
     val estadoSesion: StateFlow<EstadoUiSesion> = _estadoSesion.asStateFlow()
@@ -1173,12 +1148,6 @@ class ModeloVistaRaiz @Inject constructor(
                     }
                 }
             }
-        }
-    }
-
-    fun completarBienvenida() {
-        viewModelScope.launch {
-            preferenciasUsuario.establecerBienvenidaCompletada(true)
         }
     }
 
@@ -1210,6 +1179,7 @@ data class EstadoUiReporte(
 )
 
 @HiltViewModel
+// envia reportes de usuario, perro o mensaje a moderacion
 class ModeloVistaReporte @Inject constructor(
     private val repositorioModeracion: RepositorioModeracion,
     savedStateHandle: SavedStateHandle,
@@ -1251,10 +1221,7 @@ class ModeloVistaReporte @Inject constructor(
     }
 }
 
-/**
- * Carga el nombre/foto del dueño y de su perro para mostrarlos en la pantalla
- * de celebración del coincidencia.
- */
+// datos que se muestran en la pantalla de coincidencia
 data class EstadoUiResultadoCoincidencia(
     val nombreOtroUsuario: String = "",
     val nombrePerro: String = "",
@@ -1263,6 +1230,7 @@ data class EstadoUiResultadoCoincidencia(
 )
 
 @HiltViewModel
+// carga los datos que se ven al celebrar una coincidencia
 class ModeloVistaResultadoCoincidencia @Inject constructor(
     private val repositorioUsuario: RepositorioUsuario,
     private val repositorioPerro: RepositorioPerro,
@@ -1299,11 +1267,12 @@ data class EstadoUiAutenticacion(
     val cargando: Boolean = false,
     val error: String? = null,
     val info: String? = null,
-    /** Tras registro con correo pendiente de verificar: la UI puede pasar a la pestaña de inicio de sesión. */
+    // si el registro pide verificar correo, volvemos al login
     val cambiarAPestanaInicioSesion: Boolean = false,
 )
 
 @HiltViewModel
+// gestiona login, registro y recuperacion de contrasena
 class ModeloVistaAutenticacion @Inject constructor(
     private val repositorioAutenticacion: RepositorioAutenticacion,
     private val repositorioUsuario: RepositorioUsuario,
@@ -1364,7 +1333,7 @@ class ModeloVistaAutenticacion @Inject constructor(
         }
     }
 
-    /** Restablecer contraseña desde la pantalla de login. */
+    // manda el correo para recuperar la contrasena
     fun restablecerContrasena(correo: String) {
         viewModelScope.launch {
             _estado.update {

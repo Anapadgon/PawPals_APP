@@ -15,6 +15,7 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
+// aqui se enlazan las interfaces con sus clases reales de supabase
 abstract class ModuloEnlacesApp {
     @Binds @Singleton abstract fun bindRepositorioAutenticacion(impl: RepositorioAutenticacionSupabase): RepositorioAutenticacion
     @Binds @Singleton abstract fun bindRepositorioUsuario(impl: RepositorioUsuarioSupabase): RepositorioUsuario
@@ -37,6 +38,7 @@ abstract class ModuloEnlacesApp {
 object ModuloSupabase {
     @Provides
     @Singleton
+    // crea un unico cliente compartido para auth, base de datos y storage
     fun proveerClienteSupabase(): SupabaseClient {
         val url = BuildConfig.SUPABASE_URL.trim()
         val key = BuildConfig.SUPABASE_ANON_KEY.trim()

@@ -13,28 +13,21 @@ import kotlinx.coroutines.flow.map
 private val Context.pawDataStore by preferencesDataStore(name = "pawpals_preferencias")
 
 @Singleton
+// guarda ajustes simples del usuario sin tener que pedirlos al servidor
 class PreferenciasUsuario @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    private val bienvenidaKey = booleanPreferencesKey("bienvenida_completada")
     private val notificarMensajesKey = booleanPreferencesKey("notificar_mensajes")
     private val notificarPaseosKey = booleanPreferencesKey("notificar_paseos")
     private val notificarCoincidenciasKey = booleanPreferencesKey("notificar_coincidencias")
     private val ubicacionSoloDurantePaseoKey = booleanPreferencesKey("ubicacion_solo_durante_paseo")
 
-    val bienvenidaCompletada: Flow<Boolean> = context.pawDataStore.data.map { prefs ->
-        prefs[bienvenidaKey] ?: false
-    }
-
+    // valores por defecto pensados para que la app funcione desde el primer arranque
     val notificarMensajes: Flow<Boolean> = context.pawDataStore.data.map { it[notificarMensajesKey] ?: true }
     val notificarPaseos: Flow<Boolean> = context.pawDataStore.data.map { it[notificarPaseosKey] ?: true }
     val notificarCoincidencias: Flow<Boolean> = context.pawDataStore.data.map { it[notificarCoincidenciasKey] ?: true }
     val ubicacionSoloDurantePaseo: Flow<Boolean> =
         context.pawDataStore.data.map { it[ubicacionSoloDurantePaseoKey] ?: false }
-
-    suspend fun establecerBienvenidaCompletada(value: Boolean) {
-        context.pawDataStore.edit { it[bienvenidaKey] = value }
-    }
 
     suspend fun establecerNotificarMensajes(value: Boolean) {
         context.pawDataStore.edit { it[notificarMensajesKey] = value }

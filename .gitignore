@@ -1,4 +1,4 @@
-# Android / Gradle
+# cosas que genera android studio o gradle
 .gradle/
 build/
 **/build/

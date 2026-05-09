@@ -1,19 +1,11 @@
 package com.pawpals.app
 
-/** Identidad mínima de la sesión Supabase Auth. */
+// datos minimos que llegan desde supabase auth
 data class CuentaAuth(
     val uid: String,
     val correo: String?,
 )
 
-/**
- * Resultado del registro por correo en Supabase Auth.
- *
- * Si en el panel de Supabase tienes **Confirm email** desactivado (recomendado para esta demo),
- * [sesionActiva] será `true` y el usuario entra enseguida.
- * Si lo activas más adelante, el alta en `auth.users` sigue siendo correcta pero puede no haber
- * sesión hasta que el usuario abra el enlace del correo ([sesionActiva] `false`).
- */
 data class ResultadoRegistroCorreo(
     val correo: String,
     val sesionActiva: Boolean,
@@ -26,6 +18,7 @@ data class EstadisticasAdministracion(
     val reportesAbiertos: Int,
 )
 
+// rol usado para separar usuario normal y panel de administracion
 enum class RolUsuario {
     USUARIO,
     ADMINISTRADOR,
@@ -48,9 +41,11 @@ data class PerfilUsuario(
     val numeroCoincidencias: Int = 0,
     val paseando: Boolean = false,
 ) {
+    // se mantiene este alias porque varias pantallas hablan de ciudad
     val ciudad: String get() = zona
 }
 
+// valores que se guardan en base de datos y tambien se muestran en la ui
 enum class NivelEnergia(val label: String) {
     TRANQUILO("Tranquilo"),
     MODERADO("Moderado"),
@@ -91,6 +86,7 @@ data class PerfilPerro(
     val sociabilidad: Sociabilidad = Sociabilidad.MUY_SOCIABLE,
 )
 
+// estado de una coincidencia entre dos usuarios
 enum class EstadoCoincidencia {
     PENDIENTE,
     ACEPTADA,

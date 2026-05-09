@@ -1,6 +1,6 @@
--- Ejecutar en Supabase → SQL Editor (después de pawpals_esquema_completo.sql).
--- Crea la fila mínima en public.usuarios para auth.uid(), sin depender solo del INSERT vía RLS.
--- La app llama: postgrest.rpc("pawpals_asegurar_mi_usuario", { p_correo, p_nombre_visible }).
+-- se ejecuta despues del esquema principal
+-- crea la fila del usuario si todavia no existe
+-- la app lo llama cuando alguien entra o se registra
 
 create or replace function public.pawpals_asegurar_mi_usuario(
   p_correo text default '',
@@ -57,4 +57,4 @@ revoke all on function public.pawpals_asegurar_mi_usuario(text, text) from publi
 grant execute on function public.pawpals_asegurar_mi_usuario(text, text) to authenticated;
 
 comment on function public.pawpals_asegurar_mi_usuario(text, text) is
-  'Crea la fila del usuario actual en public.usuarios si no existe (SECURITY DEFINER).';
+  'crea la fila del usuario actual si todavia no existe';

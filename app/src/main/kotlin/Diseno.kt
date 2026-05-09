@@ -52,7 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import coil.compose.AsyncImage
 
-// --- Paleta ---
+// colores base de pawpals usados por todas las pantallas
 val CoralPrimary = Color(0xFFF4724A)
 val CoralDark = Color(0xFFE05A33)
 val PeachSecondary = Color(0xFFF89B6E)
@@ -79,7 +79,7 @@ val CoralGradientSoft = Brush.verticalGradient(
     colors = listOf(CoralPrimary, PeachSecondary),
 )
 
-// --- Tipografía ---
+// tipografia general para mantener el mismo estilo en la app
 val PawpalsTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
@@ -159,6 +159,7 @@ fun TemaPawpals(contenido: @Composable () -> Unit) {
 }
 
 @Composable
+// boton principal reutilizable para acciones importantes
 fun BotonPrimarioPaw(
     texto: String,
     onClick: () -> Unit,
@@ -189,6 +190,7 @@ fun BotonPrimarioPaw(
 }
 
 @Composable
+// boton secundario para volver, saber mas o acciones menos urgentes
 fun BotonContornoPaw(
     texto: String,
     onClick: () -> Unit,
@@ -218,6 +220,7 @@ fun BotonContornoPaw(
 }
 
 @Composable
+// campo de texto con el borde y colores propios de la app
 fun CampoContornoPaw(
     valor: String,
     alCambiarValor: (String) -> Unit,
@@ -262,6 +265,7 @@ fun CampoContornoPaw(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+// barra superior comun, con boton de volver opcional
 fun BarraSuperiorPaw(
     titulo: String,
     alVolver: (() -> Unit)? = null,
@@ -355,6 +359,7 @@ fun InsigniaAtributo(
 }
 
 @Composable
+// avatar simple cuando no hay foto cargada
 fun AvatarPaw(
     nombre: String,
     modifier: Modifier = Modifier,
@@ -387,6 +392,7 @@ fun AvatarPaw(
 }
 
 @Composable
+// circulo clicable para escoger foto de usuario o perro
 fun SelectorFotoPaw(
     etiqueta: String,
     onClick: () -> Unit,
