@@ -1,5 +1,6 @@
 # cosas que genera android studio o gradle
 .gradle/
+.kotlin/
 build/
 **/build/
 local.properties
