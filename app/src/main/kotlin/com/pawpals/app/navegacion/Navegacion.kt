@@ -35,7 +35,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 
-// rutas internas de la app; asi no se escriben strings sueltos por las pantallas
+// rutas internas de la app, asi no se escriben strings sueltos por las pantallas
 object DestinosPaw {
     const val ONBOARDING_INTRO = "bienvenida_intro"
     const val LOGIN = "inicio_sesion"
@@ -61,6 +61,7 @@ fun ContenedorPrincipalUsuario(
     miUid: String,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
+    notificacionesViewModel: ModeloVistaNotificaciones = hiltViewModel(),
 ) {
     val permisos = buildList {
         add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -76,6 +77,9 @@ fun ContenedorPrincipalUsuario(
     LaunchedEffect(Unit) {
         lanzadorPermisos.launch(permisos)
     }
+    LaunchedEffect(miUid) {
+        notificacionesViewModel.iniciar(miUid)
+    }
 
     val pilaNavegacion by navController.currentBackStackEntryAsState()
     val rutaActual = pilaNavegacion?.destination?.route
@@ -85,7 +89,7 @@ fun ContenedorPrincipalUsuario(
         DestinosPaw.PASEOS,
         DestinosPaw.PROFILE,
     )
-    // la barra inferior solo aparece en las pestanas principales
+    // la barra inferior solo aparece en las pestañas principales
     val mostrarBarraInferior = rutaActual in rutasPestanas
 
     Scaffold(
@@ -166,9 +170,6 @@ fun ContenedorPrincipalUsuario(
                 PantallaConversacion(
                     miUid = miUid,
                     onBack = { navController.popBackStack() },
-                    onOpenReport = { type, id ->
-                        navController.navigate(DestinosPaw.report(type, id))
-                    },
                 )
             }
             composable(
@@ -219,6 +220,7 @@ fun AnfitrionNavegacionRaiz(
                 CircularProgressIndicator()
             }
         }
+
         EstadoUiSesion.SinSesion -> {
             val navController = rememberNavController()
             NavHost(
@@ -241,12 +243,13 @@ fun AnfitrionNavegacionRaiz(
                 }
             }
         }
+
         is EstadoUiSesion.SesionUsuario -> {
             val perfil = s.perfil
             // sin estos datos basicos no se abre la app principal todavia
             val necesitaConfiguracionPerfil = perfil == null ||
-                perfil.nombreVisible.isBlank() ||
-                perfil.zona.isBlank()
+                    perfil.nombreVisible.isBlank() ||
+                    perfil.zona.isBlank()
 
             if (necesitaConfiguracionPerfil) {
                 val configuracionPerfil: ModeloVistaConfiguracionPerfil = hiltViewModel()
@@ -257,14 +260,14 @@ fun AnfitrionNavegacionRaiz(
                     modifier = modifier,
                 ) {
                     composable(DestinosPaw.ONBOARDING_HUMAN) {
-                        OnboardingHumanScreen(
+                        PantallaOnboardingHumano(
                             onNext = { bienvenidaNav.navigate(DestinosPaw.ONBOARDING_DOG) },
                             viewModel = configuracionPerfil,
                             onSignOut = { rootViewModel.cerrarSesion() },
                         )
                     }
                     composable(DestinosPaw.ONBOARDING_DOG) {
-                        OnboardingDogScreen(
+                        PantallaOnboardingPerro(
                             miUid = s.cuenta.uid,
                             onFinish = { },
                             viewModel = configuracionPerfil,
@@ -280,12 +283,14 @@ fun AnfitrionNavegacionRaiz(
                 )
             }
         }
+
         is EstadoUiSesion.Administrador -> {
             PantallaAdministracion(
                 onSignOut = { rootViewModel.cerrarSesion() },
                 modifier = modifier,
             )
         }
+
         EstadoUiSesion.Bloqueado -> {
             PantallaBloqueado(
                 onSignOut = { rootViewModel.cerrarSesion() },

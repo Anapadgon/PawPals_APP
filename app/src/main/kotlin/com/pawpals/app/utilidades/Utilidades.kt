@@ -6,19 +6,22 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.net.Uri
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
-import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -30,11 +33,24 @@ object UtilidadesGeograficas {
         val dLon = Math.toRadians(lon2 - lon1)
         val a =
             sin(dLat / 2).pow(2.0) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2).pow(2.0)
+                    cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                    sin(dLon / 2).pow(2.0)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return earthKm * c
     }
+}
+
+fun crearUriFotoTemporal(context: Context): Uri {
+    val archivo = File.createTempFile(
+        "pawpals_foto_${System.currentTimeMillis()}",
+        ".jpg",
+        context.cacheDir,
+    )
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        archivo,
+    )
 }
 
 private fun Location.toPair(): Pair<Double, Double> = latitude to longitude
@@ -62,7 +78,7 @@ class ControladorUbicacion @Inject constructor(
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
             ?: return false
         return lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
     suspend fun ultimaUbicacionConocidaOFresca(): Result<Pair<Double, Double>> {

@@ -16,7 +16,7 @@ create table if not exists public.usuarios (
   nombre_visible text not null default '',
   zona text not null default '',
   sobre_mi text not null default '',
-  rol text not null default 'usuario', -- 'usuario' | 'administrador' | 'administradoristrador'
+  rol text not null default 'usuario', -- 'usuario' | 'administrador'
   bloqueado boolean not null default false,
   latitud double precision,
   longitud double precision,
@@ -165,7 +165,7 @@ as $$
     select 1
     from public.usuarios u
     where u.id = (auth.uid())::text
-      and u.rol in ('administrador', 'administradoristrador')
+      and u.rol = 'administrador'
   );
 $$;
 

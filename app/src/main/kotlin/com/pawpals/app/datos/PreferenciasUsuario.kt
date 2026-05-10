@@ -23,9 +23,12 @@ class PreferenciasUsuario @Inject constructor(
     private val ubicacionSoloDurantePaseoKey = booleanPreferencesKey("ubicacion_solo_durante_paseo")
 
     // valores por defecto pensados para que la app funcione desde el primer arranque
-    val notificarMensajes: Flow<Boolean> = context.pawDataStore.data.map { it[notificarMensajesKey] ?: true }
-    val notificarPaseos: Flow<Boolean> = context.pawDataStore.data.map { it[notificarPaseosKey] ?: true }
-    val notificarCoincidencias: Flow<Boolean> = context.pawDataStore.data.map { it[notificarCoincidenciasKey] ?: true }
+    val notificarMensajes: Flow<Boolean> =
+        context.pawDataStore.data.map { it[notificarMensajesKey] ?: true }
+    val notificarPaseos: Flow<Boolean> =
+        context.pawDataStore.data.map { it[notificarPaseosKey] ?: true }
+    val notificarCoincidencias: Flow<Boolean> =
+        context.pawDataStore.data.map { it[notificarCoincidenciasKey] ?: true }
     val ubicacionSoloDurantePaseo: Flow<Boolean> =
         context.pawDataStore.data.map { it[ubicacionSoloDurantePaseoKey] ?: false }
 
